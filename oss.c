@@ -6,6 +6,8 @@
 #include "oss.h"
 #include "queue.h"
 
+int pcbtSegment;
+
 int main(int argc, char* argv[])
 {
     int c;
@@ -41,8 +43,45 @@ int main(int argc, char* argv[])
     signal(SIGINT, sigHandler);  
 
     //Call function
-
+    pcbtCreation(n);
+    filePtr = openLogFile(outputLog);
+    fprintf(filePtr, "test");
+    removeAll();
 }
+
+FILE *openLogFile(char *file)
+{
+    filePtr = fopen(file, "a");
+    if(filePtr == NULL)
+    {
+        perror("oss: Error: Failed to open output log file");
+        exit(EXIT_FAILURE);
+    }
+    return filePtr;
+}
+
+/*Create process control table*/
+void pcbtCreation(int n)
+{
+    key_t pcbtKey = ftok(".", 'a');
+    pcbtSegment = shmget(pcbtKey, sizeof(int), IPC_CREAT | 0777);   
+    if(pcbtSegment < 0)
+    {
+        perror("oss: Error: Failed to get process control table segment (shmget)");
+        exit(EXIT_FAILURE);
+    }
+    int *pcbtAttach = (int*)shmat(pcbtSegment, (void*)0, 0);
+    if(pcbtAttach < 0)
+    {
+        perror("oss: Error: Failed to attach to control table segment (shmat)");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void removeAll()
+{
+    shmctl(pcbtSegment, IPC_RMID, NULL);   
+} 
 
 /* Signal handler, that looks to see if the signal is for 2 seconds being up or ctrl-c being entered.
    In both cases, I connect to shared memory so that I can write the time that it is killed to the file
@@ -59,10 +98,7 @@ void sigHandler(int sig)
         //seg = shmget(key1, sizeof(int), IPC_CREAT | 0777);
         printf("Timer is up.\n"); 
         printf("Killing children, removing shared memory and unlinking semaphore.\n");
-        //shmctl(sharedMemSegment, IPC_RMID, NULL);
-        //shmctl(seg, IPC_RMID, NULL);
-        //sem_unlink("semChild");
-        //sem_unlink("semLogChild");
+        removeAll();
         kill(0, SIGKILL);
         exit(EXIT_SUCCESS);
     }
