@@ -6,8 +6,6 @@
 #include "oss.h"
 #include "queue.h"
 
-int pcbtSegment;
-
 int main(int argc, char* argv[])
 {
     int c;
@@ -46,7 +44,7 @@ int main(int argc, char* argv[])
     pcbtCreation(n);
     filePtr = openLogFile(outputLog);
     fprintf(filePtr, "test");
-    removeAll();
+    removeAllMem();
 }
 
 FILE *openLogFile(char *file)
@@ -60,27 +58,63 @@ FILE *openLogFile(char *file)
     return filePtr;
 }
 
-/*Create process control table*/
-void pcbtCreation(int n)
+//Create process control table
+pcbTable *pcbtCreation(int n)
 {
-    key_t pcbtKey = ftok(".", 'a');
-    pcbtSegment = shmget(pcbtKey, sizeof(int), IPC_CREAT | 0777);   
+    pcbTable *pcbtPtr;
+    pcbtSegment = shmget(pcbtKey, sizeof(pcbTable) * n, IPC_CREAT | 0777);   
     if(pcbtSegment < 0)
     {
         perror("oss: Error: Failed to get process control table segment (shmget)");
-        exit(EXIT_FAILURE);
+        removeAllMem();
     }
-    int *pcbtAttach = (int*)shmat(pcbtSegment, (void*)0, 0);
-    if(pcbtAttach < 0)
+    pcbtPtr = shmat(pcbtSegment, NULL, 0);
+    if(pcbtPtr < 0)
     {
         perror("oss: Error: Failed to attach to control table segment (shmat)");
-        exit(EXIT_FAILURE);
+        removeAllMem();
     }
 }
 
-void removeAll()
+//Create shared memory clock and initialize time to 0
+clockSim *clockCreation()
+{
+    clockSim *clockPtr;
+    clockSegment = shmget(clockKey, sizeof(clockSim), IPC_CREAT | 0777);
+    if(clockSegment < 0)
+    {
+        perror("oss: Error: Failed to get clock segment (shmget)");
+        removeAllMem();
+    }
+    clockPtr = shmat(clockSegment, NULL, 0);
+    if(clockPtr < 0)
+    {
+        perror("oss: Error: Failed to attach clock segment (shmat)");
+        removeAllMem();
+    }
+    clockPtr-> sec = 0;
+    clockPtr-> nanosec = 0;
+    return clockPtr;
+}
+
+//Create the message queue
+void msgqCreation()
+{
+    msgqSegment = msgget(messageKey, IPC_CREAT | 0666);
+    if(msgqSegment < 0)
+    {
+        perror("oss: Error: Failed to get message segment (msgget)");
+        removeAllMem();
+    }
+}
+
+void removeAllMem()
 {
     shmctl(pcbtSegment, IPC_RMID, NULL);   
+    shmctl(clockSegment, IPC_RMID, NULL);
+    msgctl(msgqSegment, IPC_RMID, NULL);
+    kill(0, SIGKILL);
+    fclose(filePtr);
 } 
 
 /* Signal handler, that looks to see if the signal is for 2 seconds being up or ctrl-c being entered.
@@ -90,34 +124,17 @@ void sigHandler(int sig)
 {
     if(sig == SIGALRM)
     {
-        //key_t key = ftok(".",'a');
-        //int sharedMemSegment;
-        //sharedMemSegment = shmget(key, sizeof(struct sharedMemory), IPC_CREAT | 0666);
-        //key_t key1 = ftok(".", 'b');
-        //int seg;
-        //seg = shmget(key1, sizeof(int), IPC_CREAT | 0777);
         printf("Timer is up.\n"); 
         printf("Killing children, removing shared memory and unlinking semaphore.\n");
-        removeAll();
-        kill(0, SIGKILL);
+        removeAllMem();
         exit(EXIT_SUCCESS);
     }
     
     if(sig == SIGINT)
     {
-        //key_t key = ftok(".",'a');
-        //int sharedMemSegment;
-        //sharedMemSegment = shmget(key, sizeof(struct sharedMemory), IPC_CREAT | 0666);
-        //key_t key1 = ftok(".", 'b');
-        //int seg;
-        //seg = shmget(key1, sizeof(int), IPC_CREAT | 0777);
         printf("Ctrl-c was entered\n");
         printf("Killing children, removing shared memory and unlinking semaphore\n");
-        //shmctl(sharedMemSegment, IPC_RMID, NULL);
-        //shmctl(seg, IPC_RMID, NULL);
-        //sem_unlink("semChild");
-        //sem_unlink("semLogChild");
-        kill(0, SIGKILL);
+        removeAllMem();
         exit(EXIT_SUCCESS);
     }
 }
