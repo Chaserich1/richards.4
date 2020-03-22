@@ -21,6 +21,8 @@ FILE* openLogFile(char *file); //Opens the output log file
 FILE* filePtr;
 
 void msgqCreation(); //Create message queue
+void scheduler(int); //Operating System simulator
+int genProcPid(int *pidArr, int totalPids); //Generates the pid (1,2,3,4,...) 
 
 //Shared memory keys and shared memory segment ids
 const key_t pcbtKey = 124905;
@@ -33,17 +35,19 @@ typedef struct
 {
     unsigned int sec;
     unsigned int nanosec;
-} clockSim;
+} clksim;
 
 //Process control block table
 typedef struct
 {
     int pid; //0-18 pid
     int priority; //the processes priority
-    clockSim cpuTime; //CPU time used
-    clockSim sysTime; //Time spent in system
-    clockSim waitingTime; //Time waiting   
-} pcbTable;
+    clksim cpuTime; //CPU time used
+    clksim sysTime; //Time spent in system
+    clksim waitingTime; //Time waiting   
+} pcbt;
 
-pcbTable *pcbtCreation(int);
+pcbt *pcbtCreation(int);
+clksim *clockCreation();
+
 #endif

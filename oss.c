@@ -6,11 +6,13 @@
 #include "oss.h"
 #include "queue.h"
 
+char *outputLog = "logOutput.dat";
+
 int main(int argc, char* argv[])
 {
     int c;
     int n = 18; //Max Children in system at once
-    char *outputLog = "ossOutputLog.dat";
+    //char *outputLog = "logOutput.dat";
 
     while((c = getopt(argc, argv, "hn:o:")) != -1)
     {
@@ -40,11 +42,72 @@ int main(int argc, char* argv[])
        children if the user enters ctrl-c */
     signal(SIGINT, sigHandler);  
 
-    //Call function
-    pcbtCreation(n);
-    filePtr = openLogFile(outputLog);
-    fprintf(filePtr, "test");
-    removeAllMem();
+    scheduler(n); //Call scheduler function
+    removeAllMem(); //Remove all shared memory, message queue, kill children, close file
+}
+
+void scheduler(int maxProcsInSys)
+{
+    filePtr = openLogFile(outputLog); //open the output file
+    
+    int maxProcs = 100; //Only 100 processes should be created
+    int outputLines = 0; //Counts the lines written to file to make sure we don't have an infinite loop
+    int completedProcs = 0; //Processes that have finished
+    int procCounter = 0; //Counts the processes
+    int procPid; //Generated "fake" Pid (ex. 1,2,3,4,5,etc)
+    int realPid; //Generated "real" Pid
+    int i = 0; //For loops
+    int status; 
+    int processExec; //exec and check for failure
+    pid_t waitingID;
+ 
+    int runningProcs = 0;
+
+    int pidsAvail[maxProcsInSys];
+
+    pcbt *pcbTable; //Process control block table
+    clksim *clockSim; //Simulated clock
+
+    pcbTable = pcbtCreation(maxProcsInSys); //Create the pcbt in shared memory
+    clockSim = clockCreation(maxProcsInSys); //Create the simed clock in shared memory
+    msgqCreation(); //Create the message queue
+
+    //while(maxProcs > completedProcs)
+    //{
+        procPid = genProcPid(pidsAvail, maxProcsInSys); //get the available pid (if there is one)
+        
+        char procPidStr[10];
+        sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
+        
+        fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER", procPid);
+ 
+        //Fork the process and check for failure
+        realPid = fork(); 
+        if(realPid < 0)
+        {
+            perror("oss: Error: Failed to fork the process");
+            removeAllMem();
+        }
+        else if(realPid == 0)
+        {
+            //Execl and check for failure
+            processExec = execl("./user", "user", procPidStr, (char *) NULL);
+            if(processExec < 0)
+            {
+                perror("oss: Error: Failed to execl");
+                removeAllMem();
+            }
+        }
+        procCounter++; //increment the counter
+        runningProcs++; //increment process currently in system   
+
+        waitingID = waitpid(-1, &status, WNOHANG);
+        if(waitingID > 0)
+        {
+            completedProcs++; //increment the completed processes
+            runningProcs--; //decrement procs currently in system
+        }
+    //}
 }
 
 FILE *openLogFile(char *file)
@@ -58,11 +121,22 @@ FILE *openLogFile(char *file)
     return filePtr;
 }
 
-//Create process control table
-pcbTable *pcbtCreation(int n)
+int genProcPid(int *pidArr, int totalPids)
 {
-    pcbTable *pcbtPtr;
-    pcbtSegment = shmget(pcbtKey, sizeof(pcbTable) * n, IPC_CREAT | 0777);   
+    int i;
+    for(i = 0; i < totalPids; i++)
+    {
+        if(pidArr[i])
+            return i;
+    }
+    return -1; //Out of pids
+}
+
+//Create process control table
+pcbt *pcbtCreation(int n)
+{
+    pcbt *pcbtPtr;
+    pcbtSegment = shmget(pcbtKey, sizeof(pcbt) * n, IPC_CREAT | 0777);   
     if(pcbtSegment < 0)
     {
         perror("oss: Error: Failed to get process control table segment (shmget)");
@@ -77,10 +151,10 @@ pcbTable *pcbtCreation(int n)
 }
 
 //Create shared memory clock and initialize time to 0
-clockSim *clockCreation()
+clksim *clockCreation()
 {
-    clockSim *clockPtr;
-    clockSegment = shmget(clockKey, sizeof(clockSim), IPC_CREAT | 0777);
+    clksim *clockPtr;
+    clockSegment = shmget(clockKey, sizeof(clksim), IPC_CREAT | 0777);
     if(clockSegment < 0)
     {
         perror("oss: Error: Failed to get clock segment (shmget)");
@@ -113,7 +187,6 @@ void removeAllMem()
     shmctl(pcbtSegment, IPC_RMID, NULL);   
     shmctl(clockSegment, IPC_RMID, NULL);
     msgctl(msgqSegment, IPC_RMID, NULL);
-    kill(0, SIGKILL);
     fclose(filePtr);
 } 
 
