@@ -59,14 +59,17 @@ void scheduler(int maxProcsInSys)
     int i = 0; //For loops
     int status; 
     int processExec; //exec and check for failure
-    pid_t waitingID;
- 
+    pid_t waitingID; 
     int runningProcs = 0;
+    int detPriority; //determining the priority of the process
+    int availPids[maxProcsInSys];
 
-    int pidsAvail[maxProcsInSys];
+    //questrt *rdrbQueue; //Round robin queue
+    //rdrbQueue = queueCreation(maxProcsInSys); //Create the round robbin queue  
 
     pcbt *pcbTable; //Process control block table
     clksim *clockSim; //Simulated clock
+    shdMem *memory;
 
     pcbTable = pcbtCreation(maxProcsInSys); //Create the pcbt in shared memory
     clockSim = clockCreation(maxProcsInSys); //Create the simed clock in shared memory
@@ -74,49 +77,84 @@ void scheduler(int maxProcsInSys)
     
     while(procCounter < maxProcs)
     {
-        procPid = genProcPid(pidsAvail, maxProcsInSys); //get the available pid (if there is one)
-       
-        if(shouldCreateNewProc(maxProcsInSys, runningProcs, procPid))
+        /* If we exceed 10000 lines written then we are finished */
+        if(outputLines >= 10000)
+            maxProcs = procCounter;            
+           
+        if(shouldCreateNewProc(maxProcsInSys, maxProcs, procCounter, runningProcs, procPid))
         {
-            char procPidStr[10];
-            sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
-        
-            fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER\n", procPid);
- 
-            //Fork the process and check for failure
-            realPid = fork(); 
-            if(realPid < 0)
+            
+            procPid = genProcPid(availPids, maxProcsInSys); //get the available pid (if there is one)            
+            
+            if(procPid > -1)
             {
-                perror("oss: Error: Failed to fork the process");
-                removeAllMem();
-            }
-            else if(realPid == 0)
-            {
-                //Execl and check for failure
-                processExec = execl("./user", "user", procPidStr, (char *) NULL);
-                if(processExec < 0)
+                char procPidStr[10];
+                sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
+       
+                detPriority = ((rand() % 101) <= 10) ? 0 : 1;             
+
+                //Fork the process and check for failure
+                realPid = fork(); 
+                if(realPid < 0)
                 {
-                    perror("oss: Error: Failed to execl");
+                    perror("oss: Error: Failed to fork the process");
                     removeAllMem();
                 }
+                else if(realPid == 0)
+                {
+                    //Execl and check for failure
+                    processExec = execl("./user", "user", procPidStr, (char *) NULL);
+                    if(processExec < 0)
+                    {
+                        perror("oss: Error: Failed to execl");
+                        removeAllMem();
+                    }
+                    exit(0);
+                }  
+ 
+                procCounter++; //increment the counter
+                runningProcs++; //increment process currently in system   
+
+                //Control Block work
+                pcbTable[procPid].realPid = realPid;
+                pcbTable[procPid].fakePid = procPid;
+                pcbTable[procPid].procClass = detPriority;
+                pcbTable[procPid].sysTime.sec = 0;//clockSim.sec;
+                pcbTable[procPid].sysTime.nanosec = 0;//clockSim.nanosec;
+                pcbTable[procPid].cpuTime.sec = 0;
+                pcbTable[procPid].cpuTime.nanosec = 0;
+                pcbTable[procPid].blkedTime.sec = 0;
+                pcbTable[procPid].blkedTime.nanosec = 0;
+                
+                /* If it is a realtime process */
+                if(pcbTable[procPid].procClass == 1)
+                {
+                    pcbTable[procPid].priority = 0;
+                    //TO DO: Queue the process in queue 0
+                    fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER", procPid);
+                    outputLines++;               
+                }
+                /* If it is a user process */
+                if(pcbTable[procPid].procClass == 0)
+                {
+                    pcbTable[procPid].priority = 1;
+                    //TO DO: Queue the process in queue 1
+                    fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER", procPid);
+                    outputLines++;
+                }
             }
-        
-            procCounter++; //increment the counter
-            runningProcs++; //increment process currently in system   
-        }
-        
-        waitingID = waitpid(-1, &status, WNOHANG);
-        if(waitingID > 0)
-        {
-            completedProcs++; //increment the completed processes
-            runningProcs--; //decrement procs currently in system
-        }
+        }   
+
+        //TO DO: Queue Junk
+    
     }
 }
 
-bool shouldCreateNewProc(int maxProcs, int procCounter, int pid)
+bool shouldCreateNewProc(int maxProcsInSys, int maxProcs, int procCounter, int runningProcs, int pid)
 {
     if(procCounter >= maxProcs)
+        return false;
+    if(runningProcs > maxProcsInSys)
         return false;
     if(pid == -1)
         return false;
@@ -139,8 +177,11 @@ int genProcPid(int *pidArr, int totalPids)
     int i;
     for(i = 0; i < totalPids; i++)
     {
-        if(pidArr[i])
-            return i - 1;
+        if(pidArr[i] == 0)
+        {
+            pidArr[i] = 1;
+            return i;
+        }
     }
     return -1; //Out of pids
 }

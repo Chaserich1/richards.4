@@ -24,7 +24,7 @@ FILE* filePtr;
 void msgqCreation(); //Create message queue
 void scheduler(int); //Operating System simulator
 int genProcPid(int *pidArr, int totalPids); //Generates the pid (1,2,3,4,...) 
-bool shouldCreateNewProc(int, int, int);
+bool shouldCreateNewProc(int, int, int, int, int);
 
 //Shared memory keys and shared memory segment ids
 const key_t pcbtKey = 124905;
@@ -35,19 +35,28 @@ int pcbtSegment, clockSegment, msgqSegment;
 //Shared memory clock
 typedef struct
 {
-    unsigned int sec;
-    unsigned int nanosec;
+    int sec;
+    int nanosec;
 } clksim;
 
 //Process control block table
 typedef struct
 {
-    int pid; //0-18 pid
+    int realPid; //Real pid
+    int fakePid; //0-18 pid
+    int procClass; //user 1 or realtime 0
     int priority; //the processes priority
     clksim cpuTime; //CPU time used
     clksim sysTime; //Time spent in system
+    clksim blkedTime; //Time blocked
     clksim waitingTime; //Time waiting   
 } pcbt;
+
+typedef struct
+{
+    pcbt pcbTable[18];
+    clksim clockSim;
+} shdMem;
 
 pcbt *pcbtCreation(int);
 clksim *clockCreation();
