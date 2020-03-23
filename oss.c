@@ -71,43 +71,56 @@ void scheduler(int maxProcsInSys)
     pcbTable = pcbtCreation(maxProcsInSys); //Create the pcbt in shared memory
     clockSim = clockCreation(maxProcsInSys); //Create the simed clock in shared memory
     msgqCreation(); //Create the message queue
-
-    //while(maxProcs > completedProcs)
-    //{
+    
+    while(procCounter < maxProcs)
+    {
         procPid = genProcPid(pidsAvail, maxProcsInSys); //get the available pid (if there is one)
+       
+        if(shouldCreateNewProc(maxProcsInSys, runningProcs, procPid))
+        {
+            char procPidStr[10];
+            sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
         
-        char procPidStr[10];
-        sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
-        
-        fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER", procPid);
+            fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER\n", procPid);
  
-        //Fork the process and check for failure
-        realPid = fork(); 
-        if(realPid < 0)
-        {
-            perror("oss: Error: Failed to fork the process");
-            removeAllMem();
-        }
-        else if(realPid == 0)
-        {
-            //Execl and check for failure
-            processExec = execl("./user", "user", procPidStr, (char *) NULL);
-            if(processExec < 0)
+            //Fork the process and check for failure
+            realPid = fork(); 
+            if(realPid < 0)
             {
-                perror("oss: Error: Failed to execl");
+                perror("oss: Error: Failed to fork the process");
                 removeAllMem();
             }
+            else if(realPid == 0)
+            {
+                //Execl and check for failure
+                processExec = execl("./user", "user", procPidStr, (char *) NULL);
+                if(processExec < 0)
+                {
+                    perror("oss: Error: Failed to execl");
+                    removeAllMem();
+                }
+            }
+        
+            procCounter++; //increment the counter
+            runningProcs++; //increment process currently in system   
         }
-        procCounter++; //increment the counter
-        runningProcs++; //increment process currently in system   
-
+        
         waitingID = waitpid(-1, &status, WNOHANG);
         if(waitingID > 0)
         {
             completedProcs++; //increment the completed processes
             runningProcs--; //decrement procs currently in system
         }
-    //}
+    }
+}
+
+bool shouldCreateNewProc(int maxProcs, int procCounter, int pid)
+{
+    if(procCounter >= maxProcs)
+        return false;
+    if(pid == -1)
+        return false;
+    return true;
 }
 
 FILE *openLogFile(char *file)
@@ -127,7 +140,7 @@ int genProcPid(int *pidArr, int totalPids)
     for(i = 0; i < totalPids; i++)
     {
         if(pidArr[i])
-            return i;
+            return i - 1;
     }
     return -1; //Out of pids
 }

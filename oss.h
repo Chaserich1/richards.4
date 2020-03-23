@@ -12,6 +12,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/types.h>
+#include <stdbool.h>
 #include <signal.h>
 
 void displayHelpMessage(); //-h getopt option
@@ -23,6 +24,7 @@ FILE* filePtr;
 void msgqCreation(); //Create message queue
 void scheduler(int); //Operating System simulator
 int genProcPid(int *pidArr, int totalPids); //Generates the pid (1,2,3,4,...) 
+bool shouldCreateNewProc(int, int, int);
 
 //Shared memory keys and shared memory segment ids
 const key_t pcbtKey = 124905;
