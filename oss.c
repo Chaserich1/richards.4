@@ -63,18 +63,22 @@ void scheduler(int maxProcsInSys)
     int runningProcs = 0;
     int detPriority; //determining the priority of the process
     int availPids[maxProcsInSys];
-
-    //questrt *rdrbQueue; //Round robin queue
-    //rdrbQueue = queueCreation(maxProcsInSys); //Create the round robbin queue  
+    
+    questrt *rdrbQueue; //Round robin queue
+    rdrbQueue = queueCreation(maxProcsInSys); //Create the round robbin queue  
 
     pcbt *pcbTable; //Process control block table
     clksim *clockSim; //Simulated clock
-    shdMem *memory;
-
+    
     pcbTable = pcbtCreation(maxProcsInSys); //Create the pcbt in shared memory
     clockSim = clockCreation(maxProcsInSys); //Create the simed clock in shared memory
     msgqCreation(); //Create the message queue
     
+    for(i = 0; i < maxProcsInSys; i++)
+    {
+        availPids[i] = true;
+    }
+
     while(procCounter < maxProcs)
     {
         /* If we exceed 10000 lines written then we are finished */
@@ -91,7 +95,14 @@ void scheduler(int maxProcsInSys)
                 char procPidStr[10];
                 sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
        
-                detPriority = ((rand() % 101) <= 10) ? 0 : 1;             
+                detPriority = ((rand() % 101) <= 15) ? 0 : 1;             
+                availPids[procPid] = false;
+
+                //fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER\n", procPid);
+                pcbTable[procPid] = pcbCreation(detPriority, procPid, (*clockSim));
+
+                enqueue(rdrbQueue, procPid);
+                printf("%d\n", rdrbQueue[procPid]);
 
                 //Fork the process and check for failure
                 realPid = fork(); 
@@ -109,43 +120,35 @@ void scheduler(int maxProcsInSys)
                         perror("oss: Error: Failed to execl");
                         removeAllMem();
                     }
-                    exit(0);
                 }  
  
                 procCounter++; //increment the counter
                 runningProcs++; //increment process currently in system   
 
-                //Control Block work
-                pcbTable[procPid].realPid = realPid;
-                pcbTable[procPid].fakePid = procPid;
-                pcbTable[procPid].procClass = detPriority;
-                pcbTable[procPid].sysTime.sec = 0;//clockSim.sec;
-                pcbTable[procPid].sysTime.nanosec = 0;//clockSim.nanosec;
-                pcbTable[procPid].cpuTime.sec = 0;
-                pcbTable[procPid].cpuTime.nanosec = 0;
-                pcbTable[procPid].blkedTime.sec = 0;
-                pcbTable[procPid].blkedTime.nanosec = 0;
-                
-                /* If it is a realtime process */
-                if(pcbTable[procPid].procClass == 1)
+                /* if it is a realtime process */
+                if(detPriority == 0)
                 {
-                    pcbTable[procPid].priority = 0;
-                    //TO DO: Queue the process in queue 0
-                    fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER", procPid);
+                    //TO DO: Queue the process in rdrbQueue
+                    fprintf(filePtr, "rdrbQueue: OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER\n", procPid);
                     outputLines++;               
                 }
                 /* If it is a user process */
-                if(pcbTable[procPid].procClass == 0)
+                if(detPriority == 1)
                 {
-                    pcbTable[procPid].priority = 1;
-                    //TO DO: Queue the process in queue 1
-                    fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER", procPid);
+                    //TO DO: Queue the process in queue 1 (MLFQ queue)
+                    fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER\n", procPid);
                     outputLines++;
                 }
             }
         }   
 
-        //TO DO: Queue Junk
+        waitingID = waitpid(-1, &status, WNOHANG);
+        if(waitingID > 0){
+            //dequeue(rdrbQueue);
+            //runningProcs--;
+            //availPids[procPid] = true;
+        }           
+        
     
     }
 }
@@ -177,9 +180,8 @@ int genProcPid(int *pidArr, int totalPids)
     int i;
     for(i = 0; i < totalPids; i++)
     {
-        if(pidArr[i] == 0)
+        if(pidArr[i])
         {
-            pidArr[i] = 1;
             return i;
         }
     }

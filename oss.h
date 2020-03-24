@@ -42,21 +42,28 @@ typedef struct
 //Process control block table
 typedef struct
 {
-    int realPid; //Real pid
     int fakePid; //0-18 pid
-    int procClass; //user 1 or realtime 0
+    int readyToGo; //user 1 or realtime 0
     int priority; //the processes priority
+    clksim arrivalTime;
     clksim cpuTime; //CPU time used
     clksim sysTime; //Time spent in system
-    clksim blkedTime; //Time blocked
+    clksim burstTime; //Time in last burst
     clksim waitingTime; //Time waiting   
 } pcbt;
 
-typedef struct
+pcbt pcbCreation(int priority, int fakePid, clksim curTime)
 {
-    pcbt pcbTable[18];
-    clksim clockSim;
-} shdMem;
+    pcbt pcb = { .fakePid = fakePid, 
+                 .priority = priority, 
+                 .readyToGo = 1, 
+                 .arrivalTime = {.sec = curTime.sec, .nanosec = curTime.nanosec},
+                 .cpuTime = {.sec = 0, .nanosec = 0},
+                 .sysTime = {.sec = 0, .nanosec = 0},
+                 .burstTime = {.sec = 0, .nanosec = 0},
+                 .waitingTime = {.sec = 0, .nanosec = 0}}; 
+    return pcb;
+}
 
 pcbt *pcbtCreation(int);
 clksim *clockCreation();

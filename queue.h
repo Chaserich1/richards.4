@@ -11,7 +11,9 @@
 typedef struct
 {
     unsigned int capacity;
-    unsigned int items, front, back;
+    unsigned int items;
+    unsigned int front;
+    unsigned int back;
     int *arr;
 } questrt;
 
@@ -34,6 +36,7 @@ void enqueue(questrt *queue, int pid)
     queue-> items += 1;
     queue-> arr[queue-> back] = pid;
     queue-> back = (queue-> back + 1) % queue-> capacity;
+    return;
 }
 
 int dequeue(questrt *queue)
