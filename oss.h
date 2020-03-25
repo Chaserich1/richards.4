@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <math.h>
 
 void displayHelpMessage(); //-h getopt option
 void sigHandler(int sig); //Signal Handle(ctrl c and timeout)
@@ -24,13 +25,19 @@ FILE* filePtr;
 void msgqCreation(); //Create message queue
 void scheduler(int); //Operating System simulator
 int genProcPid(int *pidArr, int totalPids); //Generates the pid (1,2,3,4,...) 
-bool shouldCreateNewProc(int, int, int, int, int);
+
 
 //Shared memory keys and shared memory segment ids
 const key_t pcbtKey = 124905;
 const key_t clockKey = 120354;
 const key_t messageKey = 133139;
 int pcbtSegment, clockSegment, msgqSegment;
+
+typedef struct
+{
+    long mType;
+    int mValue;
+} msg;
 
 //Shared memory clock
 typedef struct
@@ -67,5 +74,10 @@ pcbt pcbCreation(int priority, int fakePid, clksim curTime)
 
 pcbt *pcbtCreation(int);
 clksim *clockCreation();
+int blockedQueue(int *isBlocked, pcbt *pcbTable, int counter);
+clksim nextProcessStartTime(clksim maxTime, clksim curTime);
+int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum, int *outputLines);
+int shouldCreateNewProc(int, int, clksim, clksim, int);
+void clockIncrementor(clksim *simTime, int incrementor); 
 
 #endif
