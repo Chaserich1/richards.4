@@ -65,6 +65,10 @@ void scheduler(int maxProcsInSys)
     int availPids[maxProcsInSys];
     int blkedPids[maxProcsInSys];    
 
+    char msgqSegmentStr[10];
+    char quantumStr[10];
+
+
     //////////////////////////////////////////
     int schedInc = 1000;
     int idleInc = 100000;
@@ -72,13 +76,26 @@ void scheduler(int maxProcsInSys)
     int quantum = 10000000;
     int burst;
     int response;
+
+    clksim totalCPU = {.sec = 0, .nanosec = 0};
+    clksim totalSYS = {.sec = 0, .nanosec = 0};
+    clksim totalIdle = {.sec = 0, .nanosec = 0};
+    clksim totalWait = {.sec = 0, .nanosec = 0};
+    double avgCPU = 0.0;
+    double avgSYS = 0.0;
+    double avgWait = 0.0;
+
+    sprintf(quantumStr, "%d", quantum);
    
     clksim maxTimeBetweenNewProcesses = {.sec = 0, .nanosec = 500000000};
     clksim nextProc; 
     //////////////////////////////////////////
 
-    questrt *rdrbQueue; //Round robin queue
+    questrt *rdrbQueue, *queue1, *queue2, *queue3; //Round robin queue
     rdrbQueue = queueCreation(maxProcsInSys); //Create the round robbin queue  
+    queue1 = queueCreation(maxProcsInSys);
+    queue2 = queueCreation(maxProcsInSys);
+    queue3 = queueCreation(maxProcsInSys);
 
     pcbt *pcbTable; //Process control block table
     clksim *clockSim; //Simulated clock
@@ -86,6 +103,8 @@ void scheduler(int maxProcsInSys)
     pcbTable = pcbtCreation(maxProcsInSys); //Create the pcbt in shared memory
     clockSim = clockCreation(maxProcsInSys); //Create the simed clock in shared memory
     msgqCreation(); //Create the message queue
+
+    sprintf(msgqSegmentStr, "%d", msgqSegment);
     
     for(i = 0; i < maxProcsInSys; i++)
     {
@@ -95,16 +114,16 @@ void scheduler(int maxProcsInSys)
 
     nextProc = nextProcessStartTime(maxTimeBetweenNewProcesses, (*clockSim));
 
-    while(procCounter < maxProcs)
+    while(completedProcs < maxProcs)
     {
         /* If we exceed 10000 lines written then we are finished */
         if(outputLines >= 10000)
             maxProcs = procCounter;            
-           
+    
+        procPid = genProcPid(availPids, maxProcsInSys); //get the available pid (if there is one)
+       
         if(shouldCreateNewProc(maxProcs, procCounter, (*clockSim), nextProc, procPid))
-        {
-            
-            procPid = genProcPid(availPids, maxProcsInSys); //get the available pid (if there is one)            
+        {            
             
             //if(procPid == -1)
             //{
@@ -116,8 +135,23 @@ void scheduler(int maxProcsInSys)
  
                 pcbTable[procPid] = pcbCreation(detPriority, procPid, (*clockSim));
 
-                enqueue(rdrbQueue, procPid);
-                printf("%d\n", rdrbQueue[procPid]);
+                /* if it is a realtime process */
+                if(detPriority == 0)
+                {
+                    enqueue(rdrbQueue, procPid);
+                    fprintf(filePtr, "rdrbQueue: OSS: Generating process with PID %d and putting it in queue %d at time %d seconds %d nanoseconds\n", procPid, detPriority, clockSim-> sec, clockSim-> nanosec);
+                    outputLines++;
+                }
+                /* If it is a user process */
+                if(detPriority == 1)
+                {
+                    enqueue(queue1, procPid);
+                    fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue %d at time %d seconds %d nanoseconds\n", procPid, detPriority, clockSim-> sec, clockSim-> nanosec);
+                    outputLines++;
+                }
+
+                //enqueue(rdrbQueue, procPid);
+                //printf("%d\n", rdrbQueue[procPid]);
 
                 //Fork the process and check for failure
                 realPid = fork(); 
@@ -143,26 +177,12 @@ void scheduler(int maxProcsInSys)
                 nextProc = nextProcessStartTime(maxTimeBetweenNewProcesses, (*clockSim));
                 clockIncrementor(clockSim, 10000);
 
-                /* if it is a realtime process */
-                if(detPriority == 0)
-                {
-                    //TO DO: Queue the process in rdrbQueue
-                    fprintf(filePtr, "rdrbQueue: OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER\n", procPid);
-                    outputLines++;               
-                }
-                /* If it is a user process */
-                if(detPriority == 1)
-                {
-                    //TO DO: Queue the process in queue 1 (MLFQ queue)
-                    fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue HOLDER at time HOLDER\n", procPid);
-                    outputLines++;
-                }
             //}
         }   
         else if((procPid = blockedQueue(blkedPids, pcbTable, maxProcsInSys)) >= 0)
         {
             blkedPids[procPid] = false;
-            fprintf(filePtr, "OSS: Unblocked process with PID %d at time HOLDER\n", procPid);
+            fprintf(filePtr, "OSS: Unblocked process with PID %d at time %d seconds %d nanoseconds\n", procPid, clockSim-> sec, clockSim-> nanosec);
             if(pcbTable[procPid].priority == 0)
             {
                 fprintf(filePtr, "OSS: Moving process with PID %d to Round Robin Queue\n");
@@ -170,8 +190,8 @@ void scheduler(int maxProcsInSys)
             }
             else
             {
-                fprintf(filePtr, "OSS: Moving process with PID %d to first queue\n");
-                //enqueue in the first queue
+                fprintf(filePtr, "OSS: Moving process with PID %d to first queue\n", procPid);
+                enqueue(queue1, procPid);
             }
             //increment time
             clockIncrementor(clockSim, blockedInc);           
@@ -182,6 +202,31 @@ void scheduler(int maxProcsInSys)
             procPid = dequeue(rdrbQueue);
             detPriority = pcbTable[procPid].priority;
             response = dispatcher(procPid, detPriority, msgqSegment, (*clockSim), quantum, &outputLines);
+            burst = response * (quantum / 100) * pow(2.0, (double)detPriority);
+            if(response < 0)
+            {
+                burst *= -1;
+                clockIncrementor(clockSim, burst);
+                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burst);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                blkedPids[procPid] = true;
+            }
+            else if(response == 100)
+            {
+                clockIncrementor(clockSim, burst);
+                fprintf(filePtr, "OSS: Process with PID %d used full slice and used %d nanoseconds\n", procPid, burst);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                enqueue(rdrbQueue, procPid);  
+            }
+            else
+            {
+                clockIncrementor(clockSim, burst);
+                realPid = wait(NULL);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                availPids[procPid] = true;
+                completedProcs += 1;
+                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
+            }
         }   
  
     }
@@ -189,7 +234,7 @@ void scheduler(int maxProcsInSys)
 
 int shouldCreateNewProc(int maxProcs, int procCounter, clksim curTime, clksim nextProcTime, int pid)
 {
-    if(procCounter >= 17)
+    if(procCounter >= 18)
         return 0;
     if(pid == -1)
         return 0;
@@ -253,15 +298,6 @@ clksim nextProcessStartTime(clksim maxTime, clksim curTime)
 }
 
 ///////////////////////////////////////
-void clockIncrementor(clksim *simTime, int incrementor)
-{
-    simTime-> nanosec += incrementor;
-    if(simTime-> nanosec >= 1000000000)
-    {
-        simTime-> sec += 1;
-        simTime-> nanosec -= 1000000000;
-    }
-}
 
 int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum, int *outputLines)
 {

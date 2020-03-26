@@ -72,12 +72,48 @@ pcbt pcbCreation(int priority, int fakePid, clksim curTime)
     return pcb;
 }
 
+void clockIncrementor(clksim *simTime, int incrementor)                                                                 {                                                                                                                           simTime-> nanosec += incrementor;                                                                                       if(simTime-> nanosec >= 1000000000)                                                                                     {                                                                                                                           simTime-> sec += 1;                                                                                                     simTime-> nanosec -= 1000000000;                                                                                    }                                                                                                                   }
+
+clksim addTime(clksim a, clksim b)
+{
+    clksim sum = {.sec = a.sec + b.sec,
+                  .nanosec = a.nanosec + b.nanosec};
+    if(sum.nanosec >= 1000000000)
+    {
+        sum.nanosec -= 1000000000;
+        sum.sec += 1;
+    }
+}
+
+clksim subTime(clksim a, clksim b)
+{
+    clksim sub = {.sec = a.sec - b.sec,
+                  .nanosec = a.nanosec - b.nanosec};
+    if(sub.nanosec < 0)
+    {
+        sub.nanosec += 1000000000;
+        sub.sec -= 1;
+    }
+}
+
+clksim divTime(clksim simTime, int divisor)
+{
+    clksim quotient = {.sec = simTime.sec / divisor,
+                       .nanosec = simTime.nanosec / divisor};
+    return quotient;
+}
+
 pcbt *pcbtCreation(int);
 clksim *clockCreation();
 int blockedQueue(int *isBlocked, pcbt *pcbTable, int counter);
 clksim nextProcessStartTime(clksim maxTime, clksim curTime);
 int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum, int *outputLines);
 int shouldCreateNewProc(int, int, clksim, clksim, int);
-void clockIncrementor(clksim *simTime, int incrementor); 
+//void clockIncrementor(clksim *simTime, int incrementor); 
+
+int determineStatus();
+void clockAndTableGetter(int);
+pcbt *pcbtAttach();
+clksim *clockAttach();
 
 #endif

@@ -15,7 +15,7 @@ $(TARGET1): $(OBJS1)
 	$(CC) $(ALL_CFLAGS) -o $@ $(OBJS1) $(MATHFLAG)
 
 $(TARGET2): $(OBJS2)
-	$(CC) $(ALL_CFLAGS) -o $@ $(OBJS2)
+	$(CC) $(ALL_CFLAGS) -o $@ $(OBJS2) $(MATHFLAG)
 
 .c.o:
 	$(CC) $(ALL_CFLAGS) -c $<
