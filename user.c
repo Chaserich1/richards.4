@@ -21,9 +21,36 @@ int main(int argc, char *argv[])
     clksim timeBlocked;
     clksim event;
     int burst;
-    clockAndTableGetter(procPid);
-    pcbTable = pcbtAttach();
-    clockSim = clockAttach();       
+    
+    pcbtSegment = shmget(pcbtKey, sizeof(pcbt) * (procPid + 1), IPC_CREAT | 0666);
+    if(pcbtSegment < 0)
+    {
+        perror("user: Error: Failed to get pcb table segment (shmget)");
+        exit(EXIT_FAILURE);
+    }
+;
+    pcbTable = shmat(pcbtSegment, NULL, 0);
+    if(pcbTable < 0)
+    {
+        perror("user: Error: Failed to attach pcb table (shmat)");
+        exit(EXIT_FAILURE);
+    }
+    
+    clockSegment = shmget(clockKey, sizeof(clksim), IPC_CREAT | 0666);
+    if(clockSegment < 0)
+    {
+        perror("user: Error: Failed to get clock segment (shmget)");
+        exit(EXIT_FAILURE);
+    }
+
+    clockSim = shmat(clockSegment, NULL, 0);
+    if(clockSim < 0)
+    {
+        perror("user: Error: Failed to attach clock (shmat)");
+        exit(EXIT_FAILURE);
+    }       
+
+    status = determineStatus();
 
     while (status != 1)
     {
@@ -86,57 +113,14 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void clockAndTableGetter(int n)
+int determineStatus()
 {
-    pcbtSegment = shmget(pcbtKey, sizeof(pcbt) * (n + 1), IPC_CREAT | 0777);
-    if(pcbtSegment < 0)
-    {
-        perror("user: Error: Failed to get pcb table segment (shmget)");
-        exit(EXIT_FAILURE);
-    }
-
-    clockSegment = shmget(clockKey, sizeof(clksim), IPC_CREAT | 0777);
-    if(clockSegment < 0)
-    {
-        perror("user: Error: Failed to get clock segment (shmget)");
-        exit(EXIT_FAILURE);
-    }
-    return;
-}
-
-pcbt *pcbtAttach()
-{
-    pcbt *pcbTable;
-    pcbTable = shmat(pcbtSegment, NULL, 0);
-    if(pcbTable < 0)
-    {
-        perror("user: Error: Failed to attach pcb table (shmat)");
-        exit(EXIT_FAILURE);
-    }
-    return pcbTable;
-}
-
-clksim *clockAttach()
-{
-    clksim *clockSim;
-    clockSim = shmat(clockSegment, NULL, 0);
-    if(clockSim < 0)
-    {
-        perror("user: Error: Failed to attach clock (shmat)");
-        exit(EXIT_FAILURE);
-    }
-    return clockSim;
-}
-
-int determineStatus() {
-  int tPercent = 5;   //% chance of terminating
-  int bPercent = 5;  //% chance of getting blocked
-  int terminating = ((rand() % 100) + 1) <= tPercent ? 1 : 0;
-  int blocked = ((rand() % 100) + 1) <= bPercent ? 1 : 0;
-  if (terminating) 
-    return 1;
-  if (blocked) 
-    return 2;
-  // not blocked or terminating
-  return 0;
+    int timeToTerminate = ((rand() % 100) + 1) <= 5 ? 1 : 0;
+    int timeToBlock = ((rand() % 100) + 1) <= 5 ? 1 : 0;
+    if(timeToTerminate)
+        return 1;
+    else if(timeToBlock)
+        return 2;
+    else
+        return 0;
 }

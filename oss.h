@@ -12,6 +12,9 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/types.h>
+#include <sys/msg.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <stdbool.h>
 #include <signal.h>
 #include <math.h>
@@ -28,9 +31,9 @@ int genProcPid(int *pidArr, int totalPids); //Generates the pid (1,2,3,4,...)
 
 
 //Shared memory keys and shared memory segment ids
-const key_t pcbtKey = 124905;
-const key_t clockKey = 120354;
-const key_t messageKey = 133139;
+const key_t pcbtKey = 122032;
+const key_t clockKey = 202123;
+const key_t messageKey = 493343;
 int pcbtSegment, clockSegment, msgqSegment;
 
 typedef struct
@@ -42,8 +45,8 @@ typedef struct
 //Shared memory clock
 typedef struct
 {
-    int sec;
-    int nanosec;
+    unsigned int sec;
+    unsigned int nanosec;
 } clksim;
 
 //Process control block table
@@ -83,6 +86,7 @@ clksim addTime(clksim a, clksim b)
         sum.nanosec -= 1000000000;
         sum.sec += 1;
     }
+    return sum;
 }
 
 clksim subTime(clksim a, clksim b)
@@ -94,6 +98,7 @@ clksim subTime(clksim a, clksim b)
         sub.nanosec += 1000000000;
         sub.sec -= 1;
     }
+    return sub;
 }
 
 clksim divTime(clksim simTime, int divisor)
@@ -112,8 +117,5 @@ int shouldCreateNewProc(int, int, clksim, clksim, int);
 //void clockIncrementor(clksim *simTime, int incrementor); 
 
 int determineStatus();
-void clockAndTableGetter(int);
-pcbt *pcbtAttach();
-clksim *clockAttach();
 
 #endif

@@ -41,6 +41,7 @@ int main(int argc, char* argv[])
 
     scheduler(n); //Call scheduler function
     removeAllMem(); //Remove all shared memory, message queue, kill children, close file
+    return 0;
 }
 
 void scheduler(int maxProcsInSys)
@@ -106,7 +107,7 @@ void scheduler(int maxProcsInSys)
     for(i = 0; i < maxProcsInSys; i++)
     {
         availPids[i] = 1;
-        blkedPids[i] - 0;
+        blkedPids[i] = 0;
     }
 
     nextProc = nextProcessStartTime(maxTimeBetweenNewProcesses, (*clockSim));
@@ -127,7 +128,7 @@ void scheduler(int maxProcsInSys)
                 char procPidStr[10];
                 sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
        
-                detPriority = ((rand() % 101) <= 5) ? 0 : 1;             
+                detPriority = ((rand() % 101) <= 15) ? 0 : 1;             
                 availPids[procPid] = 0;
  
                 pcbTable[procPid] = pcbCreation(detPriority, procPid, (*clockSim));
@@ -160,7 +161,7 @@ void scheduler(int maxProcsInSys)
                 else if(realPid == 0)
                 {
                     //Execl and check for failure
-                    processExec = execl("./user", "user", procPidStr, msgqSegementStr, quantumStr, (char *) NULL);
+                    processExec = execl("./user", "user", procPidStr, msgqSegmentStr, quantumStr, (char *) NULL);
                     if(processExec < 0)
                     {
                         perror("oss: Error: Failed to execl");
@@ -182,7 +183,7 @@ void scheduler(int maxProcsInSys)
             fprintf(filePtr, "OSS: Unblocked process with PID %d at time %d seconds %d nanoseconds\n", procPid, clockSim-> sec, clockSim-> nanosec);
             if(pcbTable[procPid].priority == 0)
             {
-                fprintf(filePtr, "OSS: Moving process with PID %d to Round Robin Queue\n");
+                fprintf(filePtr, "OSS: Moving process with PID %d to Round Robin Queue\n", procPid);
                 enqueue(rdrbQueue, procPid);
             }
             else
@@ -270,9 +271,93 @@ void scheduler(int maxProcsInSys)
                 completedProcs += 1;
                 fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
             }
-        }   
- 
+        }  
+        else if(queue2-> items > 0)
+        {
+            clockIncrementor(clockSim, schedInc);
+            procPid = dequeue(queue2);
+            detPriority = pcbTable[procPid].priority;
+            response = dispatcher(procPid, detPriority, msgqSegment, (*clockSim), quantum, &outputLines);
+            burst = response * (quantum / 100) * pow(2.0, (double)detPriority);
+            if(response < 0)
+            {
+                burst *= -1;
+                clockIncrementor(clockSim, burst);
+                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burst);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                pcbTable[procPid].sysTime = subTime((*clockSim), pcbTable[procPid].arrivalTime);
+                pcbTable[procPid].priority = 1;
+                blkedPids[procPid] = 1;
+            }
+            else if(response == 100)
+            {
+                clockIncrementor(clockSim, burst);
+                fprintf(filePtr, "OSS: Process with PID %d used full slice and used %d nanoseconds\n", procPid, burst);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                pcbTable[procPid].sysTime = subTime((*clockSim), pcbTable[procPid].arrivalTime);
+                pcbTable[procPid].priority = 3;
+                enqueue(queue3, procPid);  
+            }
+            else
+            {
+                clockIncrementor(clockSim, burst);
+                realPid = wait(NULL);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                pcbTable[procPid].sysTime = subTime((*clockSim), pcbTable[procPid].arrivalTime);
+                totalCPU = addTime(totalCPU, pcbTable[procPid].cpuTime);
+                totalSYS = addTime(totalSYS, pcbTable[procPid].sysTime);
+                totalWait = addTime(totalWait, pcbTable[procPid].waitingTime);
+                availPids[procPid] = 1;
+                completedProcs += 1;
+                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
+            }
+        }
+        else if(queue3-> items > 0)
+        {
+            clockIncrementor(clockSim, schedInc);
+            procPid = dequeue(queue3);
+            detPriority = pcbTable[procPid].priority;
+            response = dispatcher(procPid, detPriority, msgqSegment, (*clockSim), quantum, &outputLines);
+            burst = response * (quantum / 100) * pow(2.0, (double)detPriority);
+            if(response < 0)
+            {
+                burst *= -1;
+                clockIncrementor(clockSim, burst);
+                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burst);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                pcbTable[procPid].sysTime = subTime((*clockSim), pcbTable[procPid].arrivalTime);
+                pcbTable[procPid].priority = 1;
+                blkedPids[procPid] = 1;
+            }
+            else if(response == 100)
+            {
+                clockIncrementor(clockSim, burst);
+                fprintf(filePtr, "OSS: Process with PID %d used full slice and used %d nanoseconds\n", procPid, burst);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                pcbTable[procPid].sysTime = subTime((*clockSim), pcbTable[procPid].arrivalTime);
+                enqueue(queue3, procPid);  
+            }
+            else
+            {
+                clockIncrementor(clockSim, burst);
+                realPid = wait(NULL);
+                clockIncrementor(&pcbTable[procPid].cpuTime, burst);
+                pcbTable[procPid].sysTime = subTime((*clockSim), pcbTable[procPid].arrivalTime);
+                totalCPU = addTime(totalCPU, pcbTable[procPid].cpuTime);
+                totalSYS = addTime(totalSYS, pcbTable[procPid].sysTime);
+                totalWait = addTime(totalWait, pcbTable[procPid].waitingTime);
+                availPids[procPid] = 1;
+                completedProcs += 1;
+                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
+            }
+        } 
+        else
+        {
+            clockIncrementor(&totalIdle, idleInc);
+            clockIncrementor(clockSim, idleInc);
+        }
     }
+    return;
 }
 
 int shouldCreateNewProc(int maxProcs, int procCounter, clksim curTime, clksim nextProcTime, int pid)
@@ -281,10 +366,10 @@ int shouldCreateNewProc(int maxProcs, int procCounter, clksim curTime, clksim ne
         return 0;
     if(pid < 0)
         return 0;
-    //if(nextProcTime.sec > curTime.sec)
-    //    return 0;
-    //if(nextProcTime.sec >= curTime.sec && nextProcTime.nanosec > curTime.nanosec)
-    //    return 0;
+    if(nextProcTime.sec > curTime.sec)
+        return 0;
+    if(nextProcTime.sec >= curTime.sec && nextProcTime.nanosec > curTime.nanosec)
+        return 0;
     return 1;
 }
 
@@ -306,7 +391,7 @@ int genProcPid(int *pidArr, int totalPids)
     for(i = 0; i < totalPids; i++)
     {
         if(pidArr[i])
-        {
+	{
             return i;
         }
     }
@@ -349,9 +434,9 @@ int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum
     message.mType = fakePid + 1;
     message.mValue = quantum;
     fprintf(filePtr, "OSS: Dispatching process with PID %d from queue %d at time %d seconds %d nanoseconds\n", fakePid, priority, curTime.sec, curTime.nanosec);
-    *outputLines++;
+    *outputLines += 1;
 
-    if(msgsnd(msgId, &message, sizeof(message.mValue, 0) == -1))
+    if(msgsnd(msgId, &message, sizeof(message.mValue), 0) == -1)
     {
         perror("oss: Error: Failed to send the message (msgsnd)");
         removeAllMem();
@@ -370,7 +455,7 @@ int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum
 pcbt *pcbtCreation(int n)
 {
     pcbt *pcbtPtr;
-    pcbtSegment = shmget(pcbtKey, sizeof(pcbt) * n, IPC_CREAT | 0777);   
+    pcbtSegment = shmget(pcbtKey, sizeof(pcbt) * n, IPC_CREAT | 0666);   
     if(pcbtSegment < 0)
     {
         perror("oss: Error: Failed to get process control table segment (shmget)");
@@ -382,13 +467,14 @@ pcbt *pcbtCreation(int n)
         perror("oss: Error: Failed to attach to control table segment (shmat)");
         removeAllMem();
     }
+    return pcbtPtr;
 }
 
 //Create shared memory clock and initialize time to 0
 clksim *clockCreation()
 {
     clksim *clockPtr;
-    clockSegment = shmget(clockKey, sizeof(clksim), IPC_CREAT | 0777);
+    clockSegment = shmget(clockKey, sizeof(clksim), IPC_CREAT | 0666);
     if(clockSegment < 0)
     {
         perror("oss: Error: Failed to get clock segment (shmget)");
@@ -408,7 +494,7 @@ clksim *clockCreation()
 //Create the message queue
 void msgqCreation()
 {
-    msgqSegment = msgget(messageKey, IPC_CREAT | 0666);
+    msgqSegment = msgget(messageKey, IPC_CREAT | 0777);
     if(msgqSegment < 0)
     {
         perror("oss: Error: Failed to get message segment (msgget)");
@@ -433,7 +519,7 @@ void sigHandler(int sig)
     if(sig == SIGALRM)
     {
         printf("Timer is up.\n"); 
-        printf("Killing children, removing shared memory and unlinking semaphore.\n");
+        printf("Killing children, removing shared memory and message queue.\n");
         removeAllMem();
         exit(EXIT_SUCCESS);
     }
@@ -441,7 +527,7 @@ void sigHandler(int sig)
     if(sig == SIGINT)
     {
         printf("Ctrl-c was entered\n");
-        printf("Killing children, removing shared memory and unlinking semaphore\n");
+        printf("Killing children, removing shared memory and message queue\n");
         removeAllMem();
         exit(EXIT_SUCCESS);
     }
