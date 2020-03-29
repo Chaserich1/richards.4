@@ -25,7 +25,6 @@ void removeAllMem(); //Removes all sharedmemory
 FILE* openLogFile(char *file); //Opens the output log file
 FILE* filePtr;
 
-void msgqCreation(); //Create message queue
 void scheduler(int); //Operating System simulator
 int genProcPid(int *pidArr, int totalPids); //Generates the pid (1,2,3,4,...) 
 
@@ -108,14 +107,10 @@ clksim divTime(clksim simTime, int divisor)
     return quotient;
 }
 
-pcbt *pcbtCreation(int);
-clksim *clockCreation();
 int blockedQueue(int *isBlocked, pcbt *pcbTable, int counter);
 clksim nextProcessStartTime(clksim maxTime, clksim curTime);
 int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum, int *outputLines);
 int shouldCreateNewProc(int, int, clksim, clksim, int);
 //void clockIncrementor(clksim *simTime, int incrementor); 
-
-int determineStatus();
 
 #endif

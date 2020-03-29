@@ -17,6 +17,7 @@ typedef struct
     int *arr;
 } questrt;
 
+/* Create the queue */
 questrt *queueCreation(int capacity)
 {
     int i;
@@ -31,6 +32,7 @@ questrt *queueCreation(int capacity)
     return queue;
 }
 
+/* Add a process to the queue */
 void enqueue(questrt *queue, int pid)
 {
     queue-> items += 1;
@@ -39,6 +41,7 @@ void enqueue(questrt *queue, int pid)
     return;
 }
 
+/* Remove a process from the queue */
 int dequeue(questrt *queue)
 {
     int pid;

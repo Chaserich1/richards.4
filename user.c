@@ -22,13 +22,13 @@ int main(int argc, char *argv[])
     clksim event;
     int burst;
     
+    /* Get and attach to the process control block table shared memory */
     pcbtSegment = shmget(pcbtKey, sizeof(pcbt) * (procPid + 1), IPC_CREAT | 0666);
     if(pcbtSegment < 0)
     {
         perror("user: Error: Failed to get pcb table segment (shmget)");
         exit(EXIT_FAILURE);
     }
-;
     pcbTable = shmat(pcbtSegment, NULL, 0);
     if(pcbTable < 0)
     {
@@ -36,13 +36,13 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
     
+    /* Get and attach to the clock simulation shared memory */
     clockSegment = shmget(clockKey, sizeof(clksim), IPC_CREAT | 0666);
     if(clockSegment < 0)
     {
         perror("user: Error: Failed to get clock segment (shmget)");
         exit(EXIT_FAILURE);
     }
-
     clockSim = shmat(clockSegment, NULL, 0);
     if(clockSim < 0)
     {
@@ -50,49 +50,56 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }       
 
-    status = determineStatus();
-
+    /* While it is not to be terminated */
     while (status != 1)
     {
+        /* Receive the message and check for failure */
         if((msgrcv(msgqSegment, &message, sizeof(message.mValue), (procPid + 1), 0)) == -1)
         {
             perror("user: Error: Failed to recieve message (msgrcv)");
             exit(EXIT_FAILURE);
         }
- 
-        status = determineStatus();
-        switch(status)
+  
+        /* Determine if it is blocked or terminating or neither */
+        int timeToTerminate = ((rand() % 100) + 1) <= 5 ? 1 : 0;
+        int timeToBlock = ((rand() % 100) + 1) <= 5 ? 1 : 0;
+        if(timeToTerminate)
+            status = 1;
+        else if(timeToBlock)
+            status = 2;
+        else
+            status = 0;
+
+        /* Set mValue based on whether it is to be blocked terminated or neither */
+        if(status == 0)
+            message.mValue = 100;
+        else if(status == 1)
+            message.mValue = (rand() % 99) + 1;
+        else if(status == 2)
         {
-            case 0:
-                message.mValue = 100;
-                break;
-            case 1:
-                message.mValue = (rand() % 99) + 1;
-                break;
-            case 2:
-                message.mValue = ((rand() % 99) + 1) * -1;
-                timeBlocked.nanosec = clockSim-> nanosec;
-                timeBlocked.sec = clockSim-> sec;
-                burst = message.mValue * (quantum / 100) * pow(2.0, (double)pcbTable[procPid].priority);
-                event.nanosec = (rand() % 1000) * 1000000;
-                event.sec = (rand() % 2) + 1;
-                pcbTable[procPid].waitingTime = addTime(pcbTable[procPid].waitingTime, event);
-                event = addTime(event, timeBlocked);
-                clockIncrementor(&event, (burst * -1));
-                pcbTable[procPid].readyToGo = 0;
-                break;
-            default:
-                break;
+            message.mValue = ((rand() % 99) + 1) * -1;
+            timeBlocked.nanosec = clockSim-> nanosec;
+            timeBlocked.sec = clockSim-> sec;
+            burst = message.mValue * (quantum / 100) * pow(2.0, (double)pcbTable[procPid].priority);
+            event.nanosec = (rand() % 1000) * 1000000;
+            event.sec = (rand() % 2) + 1;
+            pcbTable[procPid].waitingTime = addTime(pcbTable[procPid].waitingTime, event);
+            event = addTime(event, timeBlocked);
+            clockIncrementor(&event, (burst * -1));
+            pcbTable[procPid].readyToGo = 0;
         }
 
         message.mType = procPid + 100;
         
+        /* Send the message back and check for failure */
         if(msgsnd(msgqSegment, &message, sizeof(message.mValue), 0) == -1)
         {
             perror("user: Error: Failed to send message (msgsnd)");
             exit(EXIT_FAILURE);
         }
 
+        /* If it is blocked then while it's not ready check the clock
+           and once the event is to happen, then unblock the process */
         if(status == 2)
         {
             while(pcbTable[procPid].readyToGo == 0)
@@ -113,14 +120,3 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-int determineStatus()
-{
-    int timeToTerminate = ((rand() % 100) + 1) <= 5 ? 1 : 0;
-    int timeToBlock = ((rand() % 100) + 1) <= 5 ? 1 : 0;
-    if(timeToTerminate)
-        return 1;
-    else if(timeToBlock)
-        return 2;
-    else
-        return 0;
-}
