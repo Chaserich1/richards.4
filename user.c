@@ -16,8 +16,8 @@ int main(int argc, char *argv[])
     quantum = atoi(argv[3]);
     srand(time(0) + (procPid + 1));
 
-    pcbt *pcbTable;
-    clksim *clockSim;
+    pcbt *pcbtPtr;
+    clksim *clockPtr;
     clksim timeBlocked;
     clksim event;
     int burst;
@@ -29,8 +29,8 @@ int main(int argc, char *argv[])
         perror("user: Error: Failed to get pcb table segment (shmget)");
         exit(EXIT_FAILURE);
     }
-    pcbTable = shmat(pcbtSegment, NULL, 0);
-    if(pcbTable < 0)
+    pcbtPtr = shmat(pcbtSegment, NULL, 0);
+    if(pcbtPtr < 0)
     {
         perror("user: Error: Failed to attach pcb table (shmat)");
         exit(EXIT_FAILURE);
@@ -43,8 +43,8 @@ int main(int argc, char *argv[])
         perror("user: Error: Failed to get clock segment (shmget)");
         exit(EXIT_FAILURE);
     }
-    clockSim = shmat(clockSegment, NULL, 0);
-    if(clockSim < 0)
+    clockPtr = shmat(clockSegment, NULL, 0);
+    if(clockPtr < 0)
     {
         perror("user: Error: Failed to attach clock (shmat)");
         exit(EXIT_FAILURE);
@@ -73,20 +73,23 @@ int main(int argc, char *argv[])
         /* Set mValue based on whether it is to be blocked terminated or neither */
         if(status == 0)
             message.mValue = 100;
+        //Ready to terminate
         else if(status == 1)
             message.mValue = (rand() % 99) + 1;
+        //Blocked process
         else if(status == 2)
         {
             message.mValue = ((rand() % 99) + 1) * -1;
-            timeBlocked.nanosec = clockSim-> nanosec;
-            timeBlocked.sec = clockSim-> sec;
-            burst = message.mValue * (quantum / 100) * pow(2.0, (double)pcbTable[procPid].priority);
+            timeBlocked.nanosec = clockPtr-> nanosec;
+            timeBlocked.sec = clockPtr-> sec;
+            burst = message.mValue * (quantum / 100) * pow(2.0, (double)pcbtPtr[procPid].priority);
             event.nanosec = (rand() % 1000) * 1000000;
             event.sec = (rand() % 2) + 1;
-            pcbTable[procPid].waitingTime = addTime(pcbTable[procPid].waitingTime, event);
+            pcbtPtr[procPid].waitingTime = addTime(pcbtPtr[procPid].waitingTime, event);
             event = addTime(event, timeBlocked);
             clockIncrementor(&event, (burst * -1));
-            pcbTable[procPid].readyToGo = 0;
+            pcbtPtr[procPid].blockedTime = addTime(pcbtPtr[procPid].blockedTime, event); 
+            pcbtPtr[procPid].readyToGo = 0;
         }
 
         message.mType = procPid + 100;
@@ -102,15 +105,15 @@ int main(int argc, char *argv[])
            and once the event is to happen, then unblock the process */
         if(status == 2)
         {
-            while(pcbTable[procPid].readyToGo == 0)
+            while(pcbtPtr[procPid].readyToGo == 0)
             {
-                if(event.sec > clockSim-> sec)
+                if(event.sec > clockPtr-> sec)
                 {
-                    pcbTable[procPid].readyToGo = 1;
+                    pcbtPtr[procPid].readyToGo = 1;
                 }
-                else if(event.nanosec >= clockSim-> nanosec && event.sec >= clockSim-> sec)
+                else if(event.nanosec >= clockPtr-> nanosec && event.sec >= clockPtr-> sec)
                 {
-                    pcbTable[procPid].readyToGo = 1;
+                    pcbtPtr[procPid].readyToGo = 1;
                 }
             }
         } 

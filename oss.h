@@ -55,7 +55,8 @@ typedef struct
     int priority; //the processes priority
     clksim arrivalTime;
     clksim cpuTime; //CPU time used
-    clksim sysTime; //Time spent in system
+    clksim tpTime; //Throughput time
+    clksim blockedTime; //Time blocked
     clksim burstTime; //Time in last burst
     clksim waitingTime; //Time waiting   
 } pcbt;
@@ -67,13 +68,22 @@ pcbt pcbCreation(int priority, int fakePid, clksim curTime)
                  .readyToGo = 1, 
                  .arrivalTime = {.sec = curTime.sec, .nanosec = curTime.nanosec},
                  .cpuTime = {.sec = 0, .nanosec = 0},
-                 .sysTime = {.sec = 0, .nanosec = 0},
+                 .tpTime = {.sec = 0, .nanosec = 0},
+                 .blockedTime = {.sec = 0, .nanosec = 0},
                  .burstTime = {.sec = 0, .nanosec = 0},
                  .waitingTime = {.sec = 0, .nanosec = 0}}; 
     return pcb;
 }
 
-void clockIncrementor(clksim *simTime, int incrementor)                                                                 {                                                                                                                           simTime-> nanosec += incrementor;                                                                                       if(simTime-> nanosec >= 1000000000)                                                                                     {                                                                                                                           simTime-> sec += 1;                                                                                                     simTime-> nanosec -= 1000000000;                                                                                    }                                                                                                                   }
+void clockIncrementor(clksim *simTime, int incrementor)
+{
+    simTime-> nanosec += incrementor;
+    if(simTime-> nanosec >= 1000000000)
+    {
+        simTime-> sec += 1;
+        simTime-> nanosec -= 1000000000;
+    }
+}
 
 clksim addTime(clksim a, clksim b)
 {
@@ -101,9 +111,9 @@ clksim subTime(clksim a, clksim b)
 
 clksim divTime(clksim simTime, int divisor)
 {
-    clksim quotient = {.sec = simTime.sec / divisor,
+    clksim division = {.sec = simTime.sec / divisor,
                        .nanosec = simTime.nanosec / divisor};
-    return quotient;
+    return division;
 }
 
 int blockedQueue(int *isBlocked, pcbt *pcbTable, int counter);

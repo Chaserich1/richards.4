@@ -14,7 +14,7 @@ To Run (Default option values or using options):
 
 $ ./oss 
 or
-$ ./oss
+$ ./oss -n 18
 
 To remove all .o, .dat and the executables:
 
