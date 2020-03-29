@@ -56,7 +56,7 @@ void scheduler(int maxProcsInSys)
     int realPid; //Generated "real" Pid
     int i = 0; //For loops 
     int processExec; //exec and check for failure
-    int detPriority; //determining the priority of the process
+    int priority; //determining the priority of the process
     int availPids[maxProcsInSys]; //array of available pids
     int blkedPids[maxProcsInSys]; //array of blocked pids
 
@@ -161,23 +161,23 @@ void scheduler(int maxProcsInSys)
             char procPidStr[10];
             sprintf(procPidStr, "%d", procPid); //Make the proc pid string for execl  
        
-            detPriority = ((rand() % 101) <= 5) ? 0 : 1;             
+            priority = ((rand() % 101) <= 5) ? 0 : 1;             
             availPids[procPid] = 0; //the fake pid is being used so change to zero
  
-            pcbTable[procPid] = pcbCreation(detPriority, procPid, (*clockSim));
+            pcbTable[procPid] = pcbCreation(priority, procPid, (*clockSim));
 
             /* if it is a realtime process */
-            if(detPriority == 0)
+            if(priority == 0)
             {
                 enqueue(rdrbQueue, procPid);
-                fprintf(filePtr, "rdrbQueue: OSS: Generating process with PID %d and putting it in queue %d at time %d seconds %d nanoseconds\n", procPid, detPriority, clockSim-> sec, clockSim-> nanosec);
+                fprintf(filePtr, "rdrbQueue: OSS: Generating process with PID %d and putting it in queue %d at time %d seconds %d nanoseconds\n", procPid, priority, clockSim-> sec, clockSim-> nanosec);
                 outputLines++;
             }
             /* If it is a user process */
-            if(detPriority == 1)
+            if(priority == 1)
             {
                 enqueue(queue1, procPid);
-                fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue %d at time %d seconds %d nanoseconds\n", procPid, detPriority, clockSim-> sec, clockSim-> nanosec);
+                fprintf(filePtr, "OSS: Generating process with PID %d and putting it in queue %d at time %d seconds %d nanoseconds\n", procPid, priority, clockSim-> sec, clockSim-> nanosec);
                 outputLines++;
             }
 
@@ -230,9 +230,9 @@ void scheduler(int maxProcsInSys)
         {
             clockIncrementor(clockSim, schedInc);
             procPid = dequeue(rdrbQueue);
-            detPriority = pcbTable[procPid].priority;
-            response = dispatcher(procPid, detPriority, msgqSegment, (*clockSim), quantum, &outputLines);
-            burst = response * (quantum / 100) * pow(2.0, (double)detPriority);
+            priority = pcbTable[procPid].priority;
+            response = dispatcher(procPid, priority, msgqSegment, (*clockSim), quantum, &outputLines);
+            burst = response * (quantum / 100) * pow(2.0, (double)priority);
             if(response < 0)
             {
                 burst *= -1;
@@ -270,9 +270,9 @@ void scheduler(int maxProcsInSys)
         {
             clockIncrementor(clockSim, schedInc);
             procPid = dequeue(queue1);
-            detPriority = pcbTable[procPid].priority;
-            response = dispatcher(procPid, detPriority, msgqSegment, (*clockSim), quantum, &outputLines);
-            burst = response * (quantum / 100) * pow(2.0, (double)detPriority);
+            priority = pcbTable[procPid].priority;
+            response = dispatcher(procPid, priority, msgqSegment, (*clockSim), quantum, &outputLines);
+            burst = response * (quantum / 100) * pow(2.0, (double)priority);
             if(response < 0)
             {
                 burst *= -1;
@@ -312,9 +312,9 @@ void scheduler(int maxProcsInSys)
         {
             clockIncrementor(clockSim, schedInc);
             procPid = dequeue(queue2);
-            detPriority = pcbTable[procPid].priority;
-            response = dispatcher(procPid, detPriority, msgqSegment, (*clockSim), quantum, &outputLines);
-            burst = response * (quantum / 100) * pow(2.0, (double)detPriority);
+            priority = pcbTable[procPid].priority;
+            response = dispatcher(procPid, priority, msgqSegment, (*clockSim), quantum, &outputLines);
+            burst = response * (quantum / 100) * pow(2.0, (double)priority);
             if(response < 0)
             {
                 burst *= -1;
@@ -354,9 +354,9 @@ void scheduler(int maxProcsInSys)
         {
             clockIncrementor(clockSim, schedInc);
             procPid = dequeue(queue3);
-            detPriority = pcbTable[procPid].priority;
-            response = dispatcher(procPid, detPriority, msgqSegment, (*clockSim), quantum, &outputLines);
-            burst = response * (quantum / 100) * pow(2.0, (double)detPriority);
+            priority = pcbTable[procPid].priority;
+            response = dispatcher(procPid, priority, msgqSegment, (*clockSim), quantum, &outputLines);
+            burst = response * (quantum / 100) * pow(2.0, (double)priority);
             if(response < 0)
             {
                 burst *= -1;

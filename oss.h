@@ -28,7 +28,6 @@ FILE* filePtr;
 void scheduler(int); //Operating System simulator
 int genProcPid(int *pidArr, int totalPids); //Generates the pid (1,2,3,4,...) 
 
-
 //Shared memory keys and shared memory segment ids
 const key_t pcbtKey = 122032;
 const key_t clockKey = 202123;

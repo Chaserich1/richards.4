@@ -21,33 +21,33 @@ typedef struct
 questrt *queueCreation(int capacity)
 {
     int i;
-    questrt *queue = (questrt *)malloc(sizeof(questrt));
-    queue-> items = 0;
-    queue-> front = 0;
-    queue-> back = 0;
-    queue-> capacity = capacity;
-    queue-> arr = (int *)malloc(capacity * sizeof(int));
+    questrt *queuePtr = (questrt *)malloc(sizeof(questrt));
+    queuePtr-> items = 0;
+    queuePtr-> front = 0;
+    queuePtr-> back = 0;
+    queuePtr-> capacity = capacity;
+    queuePtr-> arr = (int *)malloc(capacity * sizeof(int));
     for(i = 0; i < capacity; i++)
-        queue-> arr[i] = -1;
-    return queue;
+        queuePtr-> arr[i] = -1;
+    return queuePtr;
 }
 
 /* Add a process to the queue */
-void enqueue(questrt *queue, int pid)
+void enqueue(questrt *queuePtr, int pid)
 {
-    queue-> items += 1;
-    queue-> arr[queue-> back] = pid;
-    queue-> back = (queue-> back + 1) % queue-> capacity;
+    queuePtr-> items += 1;
+    queuePtr-> arr[queuePtr-> back] = pid;
+    queuePtr-> back = (queuePtr-> back + 1) % queuePtr-> capacity;
     return;
 }
 
 /* Remove a process from the queue */
-int dequeue(questrt *queue)
+int dequeue(questrt *queuePtr)
 {
     int pid;
-    queue-> items -= 1;
-    pid = queue-> arr[queue-> front];
-    queue-> front = (queue-> front + 1) % queue-> capacity;
+    queuePtr-> items -= 1;
+    pid = queuePtr-> arr[queuePtr-> front];
+    queuePtr-> front = (queuePtr-> front + 1) % queuePtr-> capacity;
     return pid;
 }
 

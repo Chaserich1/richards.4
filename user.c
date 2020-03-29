@@ -61,8 +61,8 @@ int main(int argc, char *argv[])
         }
   
         /* Determine if it is blocked or terminating or neither */
-        int timeToTerminate = ((rand() % 100) + 1) <= 5 ? 1 : 0;
-        int timeToBlock = ((rand() % 100) + 1) <= 5 ? 1 : 0;
+        int timeToTerminate = ((rand() % 100) + 1) <= 3 ? 1 : 0;
+        int timeToBlock = ((rand() % 100) + 1) <= 3 ? 1 : 0;
         if(timeToTerminate)
             status = 1;
         else if(timeToBlock)
