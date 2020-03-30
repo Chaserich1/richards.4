@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
             pcbtPtr[procPid].waitingTime = addTime(pcbtPtr[procPid].waitingTime, event);
             event = addTime(event, timeBlocked);
             clockIncrementor(&event, (burst * -1));
-            pcbtPtr[procPid].blockedTime = addTime(pcbtPtr[procPid].blockedTime, event); 
+            //pcbtPtr[procPid].blockedTime = addTime(pcbtPtr[procPid].blockedTime, event); 
             pcbtPtr[procPid].readyToGo = 0;
         }
 

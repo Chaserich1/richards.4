@@ -56,7 +56,7 @@ typedef struct
     clksim arrivalTime;
     clksim cpuTime; //CPU time used
     clksim tpTime; //Throughput time
-    clksim blockedTime; //Time blocked
+    clksim blkedTime; //Time blocked
     clksim burstTime; //Time in last burst
     clksim waitingTime; //Time waiting   
 } pcbt;
@@ -69,7 +69,7 @@ pcbt pcbCreation(int priority, int fakePid, clksim curTime)
                  .arrivalTime = {.sec = curTime.sec, .nanosec = curTime.nanosec},
                  .cpuTime = {.sec = 0, .nanosec = 0},
                  .tpTime = {.sec = 0, .nanosec = 0},
-                 .blockedTime = {.sec = 0, .nanosec = 0},
+                 .blkedTime = {.sec = 0, .nanosec = 0},
                  .burstTime = {.sec = 0, .nanosec = 0},
                  .waitingTime = {.sec = 0, .nanosec = 0}}; 
     return pcb;

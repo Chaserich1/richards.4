@@ -235,8 +235,10 @@ void scheduler(int maxProcsInSys)
                 fprintf(filePtr, "OSS: Moving process with PID %d to first queue\n", procPid);
                 enqueue(queue1, procPid);
             }
-            //increment time for the checking of the blocked queue
-            clockIncrementor(clockPtr, blockedInc);           
+            //increment time for the checking of the blocked queue and assign to total blocked time
+            clockIncrementor(clockPtr, blockedInc);
+            pcbtPtr[procPid].blkedTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
+            blkedTotal = addTime(blkedTotal, pcbtPtr[procPid].blkedTime);         
         }
         /* Round Robin queue for the real-time processes */
         else if(rdrbQueue-> items > 0)
@@ -438,8 +440,8 @@ void scheduler(int maxProcsInSys)
     printf("Average Wait Time: %.2f seconds\n", waitingAvg); 
     cpuAvg = (cpuTotal.sec + (.000000001 * cpuTotal.nanosec)) / ((double)procCounter);
     printf("Average CPU Utilization: %.2f seconds\n", cpuAvg);
-    tpAverage = (tpTotal.sec + (.000000001 * tpTotal.nanosec)) / ((double)procCounter);
-    printf("Average Throughput Time: %.2f seconds\n", tpAverage);
+    //tpAverage = (tpTotal.sec + (.000000001 * tpTotal.nanosec)) / ((double)procCounter);
+    //printf("Average Throughput Time: %.2f seconds\n", tpAverage);
     blkedAvg = (blkedTotal.sec + (.000000001 * blkedTotal.nanosec)) / ((double)procCounter);
     printf("Average Blocked Time: %.2f seconds\n", blkedAvg);
     printf("Total Idle Time with no ready processes: %d.%d seconds\n", idleTotal.sec, idleTotal.nanosec / 10000000);
