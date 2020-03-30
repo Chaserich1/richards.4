@@ -66,7 +66,7 @@ void scheduler(int maxProcsInSys)
     int schedInc = 1000; //Scheduler increment for time
     int idleInc = 100000; //Increment when no procs are ready
     int blockedInc = 1000000; //Increment for checking the blocked queue
-    int quantum = 10000000; //10 milliseconds quantum
+    int quantum = 100000000; //quantum
     int burst; //burst tiume
     int receivedMsg; //Recieved from child telling scheduler what to do
 
@@ -248,7 +248,7 @@ void scheduler(int maxProcsInSys)
             priority = pcbtPtr[procPid].priority; //get the priority from sm
             //Dispatch the process message and find the burst time
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) * pow(2.0, (double)priority);
+            burst = receivedMsg * (quantum / 100) / 1;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
@@ -296,7 +296,7 @@ void scheduler(int maxProcsInSys)
             procPid = dequeue(queue1);
             priority = pcbtPtr[procPid].priority;
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) * pow(2.0, (double)priority);
+            burst = receivedMsg * (quantum / 100) / 2;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
@@ -342,7 +342,7 @@ void scheduler(int maxProcsInSys)
             procPid = dequeue(queue2);
             priority = pcbtPtr[procPid].priority;
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) * pow(2.0, (double)priority);
+            burst = receivedMsg * (quantum / 100) / 3;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
@@ -387,8 +387,9 @@ void scheduler(int maxProcsInSys)
             clockIncrementor(clockPtr, schedInc);
             procPid = dequeue(queue3);
             priority = pcbtPtr[procPid].priority;
+            //printf("%d\n", priority);
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) * pow(2.0, (double)priority);
+            burst = receivedMsg * (quantum / 100) / 4;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
@@ -523,7 +524,7 @@ clksim nextProcessStartTime(clksim maxTime, clksim curTime)
 int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum, int *outputLines)
 {
     msg message;
-    quantum = quantum * pow(2.0, (double)priority);
+    quantum = quantum / (priority + 1);
     message.mType = fakePid + 1;
     message.mValue = quantum;
     fprintf(filePtr, "OSS: Dispatching process with PID %d from queue %d at time %d:%d\n", fakePid, priority, curTime.sec, curTime.nanosec);

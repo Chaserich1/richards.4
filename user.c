@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
   
-        /* Determine if it is blocked or terminating or neither */
+        /* Determine if it is blocked or terminating or use its entire timeslice */
         int timeToTerminate = ((rand() % 100) + 1) <= 3 ? 1 : 0;
         int timeToBlock = ((rand() % 100) + 1) <= 3 ? 1 : 0;
         if(timeToTerminate)
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
         else
             status = 0;
 
-        /* Set mValue based on whether it is to be blocked terminated or neither */
+        /* Set mValue based on whether it is to be blocked terminated or use its timeslice */
         if(status == 0)
             message.mValue = 100;
         //Ready to terminate
@@ -79,13 +79,19 @@ int main(int argc, char *argv[])
         //Blocked process
         else if(status == 2)
         {
+            //If it is blocked give it a negative random value for the message to oss
             message.mValue = ((rand() % 99) + 1) * -1;
-            timeBlocked.nanosec = clockPtr-> nanosec;
+            //Assign the time it is being blocked
+            timeBlocked.nanosec = clockPtr-> nanosec; 
             timeBlocked.sec = clockPtr-> sec;
-            burst = message.mValue * (quantum / 100) * pow(2.0, (double)pcbtPtr[procPid].priority);
+            //Value for the amount of quantum to be used depending on the queue and mvalue
+            burst = message.mValue * (quantum / 100) / (pcbtPtr[procPid].priority + 1);
+            //Random values for the event r.s random numbers
             event.nanosec = (rand() % 1000) * 1000000;
             event.sec = (rand() % 2) + 1;
+            //The event that the time is to happen is added to waitingTime for the process
             pcbtPtr[procPid].waitingTime = addTime(pcbtPtr[procPid].waitingTime, event);
+            //Determine when the event occurs based on the clock
             event = addTime(event, timeBlocked);
             clockIncrementor(&event, (burst * -1));
             //pcbtPtr[procPid].blockedTime = addTime(pcbtPtr[procPid].blockedTime, event); 
