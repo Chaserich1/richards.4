@@ -4,7 +4,6 @@
     Filename: oss.c  */
 
 #include "oss.h"
-#include "queue.h"
 
 char *outputLog = "logOutput.dat";
 
@@ -67,12 +66,13 @@ void scheduler(int maxProcsInSys)
     int idleInc = 100000; //Increment when no procs are ready
     int blockedInc = 1000000; //Increment for checking the blocked queue
     int quantum = 100000000; //quantum
-    int burst; //burst tiume
+    int burstTime; //burst tiume
     int receivedMsg; //Recieved from child telling scheduler what to do
 
     /* Stats for the end of the program */
     clksim cpuTotal = {.sec = 0, .nanosec = 0};
     clksim tpTotal = {.sec = 0, .nanosec = 0};
+    clksim blkedStart = {.sec = 0, .nanosec = 0};
     clksim blkedTotal = {.sec = 0, .nanosec = 0};
     clksim idleTotal = {.sec = 0, .nanosec = 0};
     clksim waitingTotal = {.sec = 0, .nanosec = 0};
@@ -221,8 +221,9 @@ void scheduler(int maxProcsInSys)
         }
         /* If the process pid is blocked then unblock it and move it to either the
            round robin queue or mlf queue depending on it's priority in shared mem struct */   
-        else if((procPid = blockedQueue(blkedPids, pcbtPtr, maxProcsInSys)) >= 0)
+        else if((procPid = blockedQueue(blkedPids, pcbtPtr, clockPtr, blkedTotal, maxProcsInSys)) >= 0)
         {
+            //blkedStart = addTime((*clockPtr), blkedStart);
             blkedPids[procPid] = 0;
             fprintf(filePtr, "OSS: Unblocked process with PID %d at time %d:%d\n", procPid, clockPtr-> sec, clockPtr-> nanosec);
             if(pcbtPtr[procPid].priority == 0)
@@ -237,8 +238,9 @@ void scheduler(int maxProcsInSys)
             }
             //increment time for the checking of the blocked queue and assign to total blocked time
             clockIncrementor(clockPtr, blockedInc);
-            pcbtPtr[procPid].blkedTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
-            blkedTotal = addTime(blkedTotal, pcbtPtr[procPid].blkedTime);         
+            //clockIncrementor(&pcbtPtr[procPid].blkedTime, blockedInc);
+            //pcbtPtr[procPid].blkedTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
+            //blkedTotal = addTime(blkedTotal, pcbtPtr[procPid].blkedTime);         
         }
         /* Round Robin queue for the real-time processes */
         else if(rdrbQueue-> items > 0)
@@ -246,17 +248,17 @@ void scheduler(int maxProcsInSys)
             clockIncrementor(clockPtr, schedInc); //Overhead for scheduling
             procPid = dequeue(rdrbQueue); //dequeue the process
             priority = pcbtPtr[procPid].priority; //get the priority from sm
-            //Dispatch the process message and find the burst time
+            //Dispatch the process message and find the burstTime time
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) / 1;
+            burstTime = receivedMsg * (quantum / 100) / 1;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
-                //Increment the clock based on the time burst
-                burst *= -1;
-                clockIncrementor(clockPtr, burst); 
-                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst); //increment the time used in burst
+                //Increment the clock based on the time burstTime
+                burstTime *= -1;
+                clockIncrementor(clockPtr, burstTime); 
+                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime); //increment the time used in burst
                 //the throughput time is the current time minus the arrival time of the process
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime); 
                 fprintf(filePtr, "OSS: Moving process with PID %d to blocked queue\n", procPid);
@@ -265,9 +267,9 @@ void scheduler(int maxProcsInSys)
             /* The process is neither blocked or terminated, it used its time */
             else if(receivedMsg == 100)
             {
-                clockIncrementor(clockPtr, burst); //increment the clock with the burst
-                fprintf(filePtr, "OSS: Recieving that process with PID %d ran for %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst); //icnrement the clock
+                clockIncrementor(clockPtr, burstTime); //increment the clock with the burst
+                fprintf(filePtr, "OSS: Recieving that process with PID %d ran for %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime); //icnrement the clock
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime); //get the tp time
                 fprintf(filePtr, "OSS: Moving process with PID %d to round robin queue\n", procPid);
                 enqueue(rdrbQueue, procPid); //enqueue in the round robin queue because real-time stays real-time its whole life
@@ -275,15 +277,16 @@ void scheduler(int maxProcsInSys)
             /* The process is to terminate so the pid opens up again and stats are calculated */
             else
             {
-                clockIncrementor(clockPtr, burst); //icrement the clock
+                clockIncrementor(clockPtr, burstTime); //icrement the clock
                 realPid = wait(NULL); //wait for the process
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst); //increment
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime); //increment
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime); //get the tp time
                 //Update the CPU, throughput, waiting time totals
                 cpuTotal = addTime(cpuTotal, pcbtPtr[procPid].cpuTime);
                 tpTotal = addTime(tpTotal, pcbtPtr[procPid].tpTime);
                 waitingTotal = addTime(waitingTotal, pcbtPtr[procPid].waitingTime);
-                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
+                blkedTotal = addTime(blkedTotal, pcbtPtr[procPid].blkedTime);
+                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burstTime);
                 availPids[procPid] = 1; //This pid is now available
                 completedProcs += 1; //incrment the number of procs completed
             }
@@ -296,14 +299,14 @@ void scheduler(int maxProcsInSys)
             procPid = dequeue(queue1);
             priority = pcbtPtr[procPid].priority;
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) / 2;
+            burstTime = receivedMsg * (quantum / 100) / 2;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
-                burst *= -1;
-                clockIncrementor(clockPtr, burst);
-                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                burstTime *= -1;
+                clockIncrementor(clockPtr, burstTime);
+                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 pcbtPtr[procPid].priority = 1;
                 fprintf(filePtr, "OSS: Moving process with PID %d to blocked queue\n", procPid);
@@ -312,9 +315,9 @@ void scheduler(int maxProcsInSys)
             /* The process is neither blocked or terminated, it is active */
             else if(receivedMsg == 100)
             {
-                clockIncrementor(clockPtr, burst);
-                fprintf(filePtr, "OSS: Receiving that process with PID %d ran for %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                clockIncrementor(clockPtr, burstTime);
+                fprintf(filePtr, "OSS: Receiving that process with PID %d ran for %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 pcbtPtr[procPid].priority = 2;
                 fprintf(filePtr, "OSS: Moving process with PID %d to second queue\n", procPid);
@@ -323,14 +326,15 @@ void scheduler(int maxProcsInSys)
             /* The process is to terminate so the pid opens up again and stats are calculated */
             else
             {
-                clockIncrementor(clockPtr, burst);
+                clockIncrementor(clockPtr, burstTime);
                 realPid = wait(NULL);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 cpuTotal = addTime(cpuTotal, pcbtPtr[procPid].cpuTime);
                 tpTotal = addTime(tpTotal, pcbtPtr[procPid].tpTime);
                 waitingTotal = addTime(waitingTotal, pcbtPtr[procPid].waitingTime);
-                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
+                blkedTotal = addTime(blkedTotal, pcbtPtr[procPid].blkedTime);
+                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burstTime);
                 availPids[procPid] = 1;
                 completedProcs += 1;
             }
@@ -342,14 +346,14 @@ void scheduler(int maxProcsInSys)
             procPid = dequeue(queue2);
             priority = pcbtPtr[procPid].priority;
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) / 3;
+            burstTime = receivedMsg * (quantum / 100) / 3;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
-                burst *= -1;
-                clockIncrementor(clockPtr, burst);
-                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                burstTime *= -1;
+                clockIncrementor(clockPtr, burstTime);
+                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 pcbtPtr[procPid].priority = 1;
                 fprintf(filePtr, "OSS: Moving process with PID %d to blocked queue\n", procPid);
@@ -358,9 +362,9 @@ void scheduler(int maxProcsInSys)
             /* The process is neither blocked or terminated, it is active */
             else if(receivedMsg == 100)
             {
-                clockIncrementor(clockPtr, burst);
-                fprintf(filePtr, "OSS: Receiving that process with PID %d ran for %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                clockIncrementor(clockPtr, burstTime);
+                fprintf(filePtr, "OSS: Receiving that process with PID %d ran for %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 pcbtPtr[procPid].priority = 3;
                 fprintf(filePtr, "OSS: Moving process with PID %d to third queue\n", procPid);
@@ -369,14 +373,15 @@ void scheduler(int maxProcsInSys)
             /* The process is to terminate so the pid opens up again and stats are calculated */
             else
             {
-                clockIncrementor(clockPtr, burst);
+                clockIncrementor(clockPtr, burstTime);
                 realPid = wait(NULL);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 cpuTotal = addTime(cpuTotal, pcbtPtr[procPid].cpuTime);
                 tpTotal = addTime(tpTotal, pcbtPtr[procPid].tpTime);
                 waitingTotal = addTime(waitingTotal, pcbtPtr[procPid].waitingTime);
-                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
+                blkedTotal = addTime(blkedTotal, pcbtPtr[procPid].blkedTime);
+                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burstTime);
                 availPids[procPid] = 1;
                 completedProcs += 1;
             } 
@@ -389,14 +394,14 @@ void scheduler(int maxProcsInSys)
             priority = pcbtPtr[procPid].priority;
             //printf("%d\n", priority);
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
-            burst = receivedMsg * (quantum / 100) / 4;
+            burstTime = receivedMsg * (quantum / 100) / 4;
             /* The process is blocked and moves to the blocked "queue" */
             if(receivedMsg < 0)
             {
-                burst *= -1;
-                clockIncrementor(clockPtr, burst);
-                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                burstTime *= -1;
+                clockIncrementor(clockPtr, burstTime);
+                fprintf(filePtr, "OSS: Process with PID %d is blocked and used %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 pcbtPtr[procPid].priority = 1;
                 fprintf(filePtr, "OSS: Moving process with PID %d to blocked queue\n", procPid);
@@ -405,9 +410,9 @@ void scheduler(int maxProcsInSys)
             /* The process is neither blocked or terminated, it is active */
             else if(receivedMsg == 100)
             {
-                clockIncrementor(clockPtr, burst);
-                fprintf(filePtr, "OSS: Receiving that process with PID %d ran for %d nanoseconds\n", procPid, burst);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                clockIncrementor(clockPtr, burstTime);
+                fprintf(filePtr, "OSS: Receiving that process with PID %d ran for %d nanoseconds\n", procPid, burstTime);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 fprintf(filePtr, "OSS: Moving process with PID %d to third queue\n", procPid);
                 enqueue(queue3, procPid);  
@@ -415,14 +420,15 @@ void scheduler(int maxProcsInSys)
             /* The process is to terminate so the pid opens up again and stats are calculated */
             else
             {
-                clockIncrementor(clockPtr, burst);
+                clockIncrementor(clockPtr, burstTime);
                 realPid = wait(NULL);
-                clockIncrementor(&pcbtPtr[procPid].cpuTime, burst);
+                clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime);
                 pcbtPtr[procPid].tpTime = subTime((*clockPtr), pcbtPtr[procPid].arrivalTime);
                 cpuTotal = addTime(cpuTotal, pcbtPtr[procPid].cpuTime);
                 tpTotal = addTime(tpTotal, pcbtPtr[procPid].tpTime);
                 waitingTotal = addTime(waitingTotal, pcbtPtr[procPid].waitingTime);
-                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burst);
+                blkedTotal = addTime(blkedTotal, pcbtPtr[procPid].blkedTime);
+                fprintf(filePtr, "OSS: Process with PID %d terminated and used %d nanoseconds\n", procPid, burstTime);
                 availPids[procPid] = 1;
                 completedProcs += 1;
             }
@@ -446,7 +452,7 @@ void scheduler(int maxProcsInSys)
     blkedAvg = (blkedTotal.sec + (.000000001 * blkedTotal.nanosec)) / ((double)procCounter);
     printf("Average Blocked Time: %.2f seconds\n", blkedAvg);
     printf("Total Idle Time with no ready processes: %d.%d seconds\n", idleTotal.sec, idleTotal.nanosec / 10000000);
-    printf("Total time of the program: %d.%d seconds\n", clockPtr-> sec, clockPtr-> nanosec / 10000000);
+    //printf("Total time of the program: %d.%d seconds\n", clockPtr-> sec, clockPtr-> nanosec / 10000000);
 
     return;
 }
@@ -492,15 +498,21 @@ int genProcPid(int *pidArr, int totalPids)
 }
 
 /* If the process is blocked and the process is ready then return it to unblock it */
-int blockedQueue(int *isBlocked, pcbt *pcbtPtr, int counter)
+int blockedQueue(int *isBlocked, pcbt *pcbtPtr, clksim *clockPtr, clksim blkedTotal, int counter)
 {
     int i;
+    //clksim blkedStart = {.sec = 0, .nanosec = 0};
     for(i = 0; i < counter; i++)
     {
+        //blkedStart = (*clockPtr);        
         if(isBlocked[i] == 1)
         {
             if(pcbtPtr[i].readyToGo == 1)
+            {
+                //pcbtPtr[i].blkedTime = subTime((*clockPtr), blkedStart);
+                //pcbtPtr.blkedTotal = addTime(pcbtPtr.blkedTotal, pcbtPtr[i].blkedTime);
                 return i;
+            }
         }
     }
     return -1;
@@ -508,9 +520,9 @@ int blockedQueue(int *isBlocked, pcbt *pcbtPtr, int counter)
 
 /* Determines when to launch the next process based on a random value
    between 0 and maxTimeBetweenNewProcs and returns the time that it should launch */
-clksim nextProcessStartTime(clksim maxTime, clksim curTime)
+clksim nextProcessStartTime(clksim maxTimeBetweenProcs, clksim curTime)
 {
-    clksim nextProcTime = {.sec = (rand() % (maxTime.sec + 1)) + curTime.sec, .nanosec = (rand() % (maxTime.nanosec + 1)) + curTime.nanosec};
+    clksim nextProcTime = {.sec = (rand() % (maxTimeBetweenProcs.sec + 1)) + curTime.sec, .nanosec = (rand() % (maxTimeBetweenProcs.nanosec + 1)) + curTime.nanosec};
     if(nextProcTime.nanosec >= 1000000000)
     {
         nextProcTime.sec += 1;
@@ -525,25 +537,60 @@ int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum
 {
     msg message;
     quantum = quantum / (priority + 1);
-    message.mType = fakePid + 1;
-    message.mValue = quantum;
+    message.typeofMsg = fakePid + 1;
+    message.valueofMsg = quantum;
     fprintf(filePtr, "OSS: Dispatching process with PID %d from queue %d at time %d:%d\n", fakePid, priority, curTime.sec, curTime.nanosec);
     *outputLines += 1;
 
-    if(msgsnd(msgId, &message, sizeof(message.mValue), 0) == -1)
+    if(msgsnd(msgId, &message, sizeof(message.valueofMsg), 0) == -1)
     {
         perror("oss: Error: Failed to send the message (msgsnd)");
         removeAllMem();
     }
 
-    if((msgrcv(msgId, &message, sizeof(message.mValue), fakePid + 100, 0)) == -1)
+    if((msgrcv(msgId, &message, sizeof(message.valueofMsg), fakePid + 100, 0)) == -1)
     {
         perror("oss: Error: Failed to receive the message (msgrcv)");
         removeAllMem();
     }
     
-    return message.mValue;
+    return message.valueofMsg;
 }
+
+/* Create the queue */
+questrt *queueCreation(int capacity)
+{
+    int i;
+    questrt *queuePtr = (questrt *)malloc(sizeof(questrt));
+    queuePtr-> items = 0;
+    queuePtr-> front = 0;
+    queuePtr-> back = 0;
+    queuePtr-> capacity = capacity;
+    queuePtr-> arr = (int *)malloc(capacity * sizeof(int));
+    for(i = 0; i < capacity; i++)
+        queuePtr-> arr[i] = -1;
+    return queuePtr;
+}
+
+/* Add a process to the queue */
+void enqueue(questrt *queuePtr, int pid)
+{
+    queuePtr-> items += 1;
+    queuePtr-> arr[queuePtr-> back] = pid;
+    queuePtr-> back = (queuePtr-> back + 1) % queuePtr-> capacity;
+    return;
+}
+
+/* Remove a process from the queue */
+int dequeue(questrt *queuePtr)
+{
+    int pid;
+    queuePtr-> items -= 1;
+    pid = queuePtr-> arr[queuePtr-> front];
+    queuePtr-> front = (queuePtr-> front + 1) % queuePtr-> capacity;
+    return pid;
+}
+
 
 /* When there is a failure, call this to make sure all memory is removed */
 void removeAllMem()

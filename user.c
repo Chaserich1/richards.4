@@ -20,7 +20,8 @@ int main(int argc, char *argv[])
     clksim *clockPtr;
     clksim timeBlocked;
     clksim event;
-    int burst;
+    clksim procBlkedTime;
+    int burstTime;
     
     /* Get and attach to the process control block table shared memory */
     pcbtSegment = shmget(pcbtKey, sizeof(pcbt) * (procPid + 1), IPC_CREAT | 0666);
@@ -54,7 +55,7 @@ int main(int argc, char *argv[])
     while (status != 1)
     {
         /* Receive the message and check for failure */
-        if((msgrcv(msgqSegment, &message, sizeof(message.mValue), (procPid + 1), 0)) == -1)
+        if((msgrcv(msgqSegment, &message, sizeof(message.valueofMsg), (procPid + 1), 0)) == -1)
         {
             perror("user: Error: Failed to recieve message (msgrcv)");
             exit(EXIT_FAILURE);
@@ -70,22 +71,22 @@ int main(int argc, char *argv[])
         else
             status = 0;
 
-        /* Set mValue based on whether it is to be blocked terminated or use its timeslice */
+        /* Set valueofMsg based on whether it is to be blocked terminated or use its timeslice */
         if(status == 0)
-            message.mValue = 100;
+            message.valueofMsg = 100;
         //Ready to terminate
         else if(status == 1)
-            message.mValue = (rand() % 99) + 1;
+            message.valueofMsg = (rand() % 99) + 1;
         //Blocked process
         else if(status == 2)
         {
             //If it is blocked give it a negative random value for the message to oss
-            message.mValue = ((rand() % 99) + 1) * -1;
+            message.valueofMsg = ((rand() % 99) + 1) * -1;
             //Assign the time it is being blocked
             timeBlocked.nanosec = clockPtr-> nanosec; 
             timeBlocked.sec = clockPtr-> sec;
             //Value for the amount of quantum to be used depending on the queue and mvalue
-            burst = message.mValue * (quantum / 100) / (pcbtPtr[procPid].priority + 1);
+            burstTime = message.valueofMsg * (quantum / 100) / (pcbtPtr[procPid].priority + 1);
             //Random values for the event r.s random numbers
             event.nanosec = (rand() % 1000) * 1000000;
             event.sec = (rand() % 2) + 1;
@@ -93,15 +94,19 @@ int main(int argc, char *argv[])
             pcbtPtr[procPid].waitingTime = addTime(pcbtPtr[procPid].waitingTime, event);
             //Determine when the event occurs based on the clock
             event = addTime(event, timeBlocked);
-            clockIncrementor(&event, (burst * -1));
+            clockIncrementor(&event, (burstTime * -1));
             //pcbtPtr[procPid].blockedTime = addTime(pcbtPtr[procPid].blockedTime, event); 
             pcbtPtr[procPid].readyToGo = 0;
         }
 
-        message.mType = procPid + 100;
+        clksim startblked;
+        startblked.nanosec = 10000000;
+        startblked.sec = 1;
+
+        message.typeofMsg = procPid + 100;
         
         /* Send the message back and check for failure */
-        if(msgsnd(msgqSegment, &message, sizeof(message.mValue), 0) == -1)
+        if(msgsnd(msgqSegment, &message, sizeof(message.valueofMsg), 0) == -1)
         {
             perror("user: Error: Failed to send message (msgsnd)");
             exit(EXIT_FAILURE);
@@ -113,13 +118,18 @@ int main(int argc, char *argv[])
         {
             while(pcbtPtr[procPid].readyToGo == 0)
             {
+                //clockIncrementor(&startblked, 1000000);
                 if(event.sec > clockPtr-> sec)
                 {
                     pcbtPtr[procPid].readyToGo = 1;
+                    //Get the time blocked for the pid 
+                    pcbtPtr[procPid].blkedTime = addTime(pcbtPtr[procPid].blkedTime, startblked);
                 }
                 else if(event.nanosec >= clockPtr-> nanosec && event.sec >= clockPtr-> sec)
                 {
                     pcbtPtr[procPid].readyToGo = 1;
+                    //Get the time blocked for the pid
+                    pcbtPtr[procPid].blkedTime = addTime(pcbtPtr[procPid].blkedTime, startblked);
                 }
             }
         } 

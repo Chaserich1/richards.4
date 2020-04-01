@@ -36,8 +36,8 @@ int pcbtSegment, clockSegment, msgqSegment;
 
 typedef struct
 {
-    long mType;
-    int mValue;
+    long typeofMsg;
+    int valueofMsg;
 } msg;
 
 //Shared memory clock
@@ -85,6 +85,19 @@ void clockIncrementor(clksim *simTime, int incrementor)
     }
 }
 
+typedef struct
+{
+    unsigned int capacity;
+    unsigned int items;
+    unsigned int front;
+    unsigned int back;
+    int *arr;
+} questrt;
+
+questrt *queueCreation(int capacity);
+void enqueue(questrt *queuePtr, int pid);
+int dequeue(questrt *queuePtr);
+
 clksim addTime(clksim a, clksim b)
 {
     clksim sum = {.sec = a.sec + b.sec,
@@ -116,7 +129,7 @@ clksim divTime(clksim simTime, int divisor)
     return division;
 }
 
-int blockedQueue(int *isBlocked, pcbt *pcbTable, int counter);
+int blockedQueue(int *isBlocked, pcbt *pcbTable, clksim *clockPtr, clksim blkedTotal, int counter);
 clksim nextProcessStartTime(clksim maxTime, clksim curTime);
 int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum, int *outputLines);
 int shouldCreateNewProc(int, int, clksim, clksim, int);
