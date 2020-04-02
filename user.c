@@ -9,6 +9,7 @@ int main(int argc, char *argv[])
 {
     int procPid;
     msg message;
+    int receiveMessage, sendMessage;
     int quantum;
     int status = 0;
     procPid = atoi(argv[1]);
@@ -55,7 +56,8 @@ int main(int argc, char *argv[])
     while (status != 1)
     {
         /* Receive the message and check for failure */
-        if((msgrcv(msgqSegment, &message, sizeof(message.valueofMsg), (procPid + 1), 0)) == -1)
+        receiveMessage = msgrcv(msgqSegment, &message, sizeof(message.valueofMsg), (procPid + 1), 0);
+        if(receiveMessage == -1)
         {
             perror("user: Error: Failed to recieve message (msgrcv)");
             exit(EXIT_FAILURE);
@@ -106,7 +108,8 @@ int main(int argc, char *argv[])
         message.typeofMsg = procPid + 100;
         
         /* Send the message back and check for failure */
-        if(msgsnd(msgqSegment, &message, sizeof(message.valueofMsg), 0) == -1)
+        sendMessage = msgsnd(msgqSegment, &message, sizeof(message.valueofMsg), 0);
+        if(sendMessage == -1)
         {
             perror("user: Error: Failed to send message (msgsnd)");
             exit(EXIT_FAILURE);

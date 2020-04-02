@@ -75,6 +75,7 @@ pcbt pcbCreation(int priority, int fakePid, clksim curTime)
     return pcb;
 }
 
+//Increment the clock so if it reaches a second in nanoseconds it changes accordingly
 void clockIncrementor(clksim *simTime, int incrementor)
 {
     simTime-> nanosec += incrementor;
@@ -85,6 +86,7 @@ void clockIncrementor(clksim *simTime, int incrementor)
     }
 }
 
+//Queue struct and prototypes
 typedef struct
 {
     unsigned int capacity;
@@ -98,10 +100,10 @@ questrt *queueCreation(int capacity);
 void enqueue(questrt *queuePtr, int pid);
 int dequeue(questrt *queuePtr);
 
+//For adding and subtracting the virtual clock times
 clksim addTime(clksim a, clksim b)
 {
-    clksim sum = {.sec = a.sec + b.sec,
-                  .nanosec = a.nanosec + b.nanosec};
+    clksim sum = {.sec = a.sec + b.sec, .nanosec = a.nanosec + b.nanosec};
     if(sum.nanosec >= 1000000000)
     {
         sum.nanosec -= 1000000000;
@@ -112,21 +114,13 @@ clksim addTime(clksim a, clksim b)
 
 clksim subTime(clksim a, clksim b)
 {
-    clksim sub = {.sec = a.sec - b.sec,
-                  .nanosec = a.nanosec - b.nanosec};
+    clksim sub = {.sec = a.sec - b.sec, .nanosec = a.nanosec - b.nanosec};
     if(sub.nanosec < 0)
     {
         sub.nanosec += 1000000000;
         sub.sec -= 1;
     }
     return sub;
-}
-
-clksim divTime(clksim simTime, int divisor)
-{
-    clksim division = {.sec = simTime.sec / divisor,
-                       .nanosec = simTime.nanosec / divisor};
-    return division;
 }
 
 int blockedQueue(int *isBlocked, pcbt *pcbtPtr, clksim *clockPtr, clksim blkedTotal, int counter);

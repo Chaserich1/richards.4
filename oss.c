@@ -62,7 +62,8 @@ void scheduler(int maxProcsInSys)
     char msgqSegmentStr[10];
     char quantumStr[10];
 
-    int schedInc = 1000; //Scheduler increment for time
+    int genInc = 1000; //general scheduler increment for time
+    int procInc = 10000; //After forking increment
     int idleInc = 100000; //Increment when no procs are ready
     int blockedInc = 1000000; //Increment for checking the blocked queue
     int quantum = 100000000; //quantum
@@ -76,7 +77,6 @@ void scheduler(int maxProcsInSys)
     clksim idleTotal = {.sec = 0, .nanosec = 0};
     clksim waitingTotal = {.sec = 0, .nanosec = 0};
     double cpuAvg = 0.0;
-    double tpAverage = 0.0;
     double blkedAvg = 0.0;
     double waitingAvg = 0.0;
 
@@ -219,7 +219,7 @@ void scheduler(int maxProcsInSys)
 
             //Get the start time for the next process based on the maxtime betweeen processes and increment the clock
             nextProc = nextProcessStartTime(maxTimeBetweenNewProcesses, (*clockPtr));
-            clockIncrementor(clockPtr, 10000);
+            clockIncrementor(clockPtr, procInc);
             
         }
         /* If the process pid is blocked then unblock it and move it to either the
@@ -247,8 +247,8 @@ void scheduler(int maxProcsInSys)
         /* Round Robin queue for the real-time processes */
         else if(rdrbQueue-> items > 0)
         {
-            agingCheck(maxProcsInSys, pcbtPtr);
-            clockIncrementor(clockPtr, schedInc); //Overhead for scheduling
+            //agingCheck(maxProcsInSys, pcbtPtr);
+            clockIncrementor(clockPtr, genInc); //Overhead for scheduling
             procPid = dequeue(rdrbQueue); //dequeue the process
             priority = pcbtPtr[procPid].priority; //get the priority from sm
             //Dispatch the process message and find the burstTime time
@@ -279,7 +279,7 @@ void scheduler(int maxProcsInSys)
             else
             {
                 clockIncrementor(clockPtr, burstTime); //icrement the clock
-                realPid = wait(NULL); //wait for the process
+                realPid = wait(NULL); //wait for the process to finish
                 clockIncrementor(&pcbtPtr[procPid].cpuTime, burstTime); //increment
                 //Update the CPU, blocked, waiting time totals
                 cpuTotal = addTime(cpuTotal, pcbtPtr[procPid].cpuTime);
@@ -294,7 +294,7 @@ void scheduler(int maxProcsInSys)
            to queue2 */
         else if(queue1-> items > 0)
         {
-            clockIncrementor(clockPtr, schedInc);
+            clockIncrementor(clockPtr, genInc);
             procPid = dequeue(queue1);
             priority = pcbtPtr[procPid].priority;
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
@@ -337,7 +337,7 @@ void scheduler(int maxProcsInSys)
         /* When a process uses it's time then it is moved to queue 3 */  
         else if(queue2-> items > 0)
         {
-            clockIncrementor(clockPtr, schedInc);
+            clockIncrementor(clockPtr, genInc);
             procPid = dequeue(queue2);
             priority = pcbtPtr[procPid].priority;
             receivedMsg = dispatcher(procPid, priority, msgqSegment, (*clockPtr), quantum, &outputLines);
@@ -380,7 +380,7 @@ void scheduler(int maxProcsInSys)
         /* When a process uses its time it goes back into queue3 again */   
         else if(queue3-> items > 0)
         {
-            clockIncrementor(clockPtr, schedInc);
+            clockIncrementor(clockPtr, genInc);
             procPid = dequeue(queue3);
             priority = pcbtPtr[procPid].priority;
             //printf("%d\n", priority);
@@ -430,11 +430,11 @@ void scheduler(int maxProcsInSys)
     
     /* Print the final stats to the screen including: avg wait time, avg CPU util,
        avg waiting time in a blocked queue, and how long the CPU was idle */
-    waitingAvg = (waitingTotal.sec + (.000000001 * waitingTotal.nanosec)) / ((double)procCounter);
+    waitingAvg = (waitingTotal.sec + (waitingTotal.nanosec / 10000000)) / ((double)procCounter);
     printf("Average Wait Time: %.2f seconds\n", waitingAvg); 
-    cpuAvg = (cpuTotal.sec + (.000000001 * cpuTotal.nanosec)) / ((double)procCounter);
+    cpuAvg = (cpuTotal.sec + (cpuTotal.nanosec / 10000000)) / ((double)procCounter);
     printf("Average CPU Utilization: %.2f seconds\n", cpuAvg);
-    blkedAvg = (blkedTotal.sec + (.000000001 * blkedTotal.nanosec)) / ((double)procCounter);
+    blkedAvg = (blkedTotal.sec + (blkedTotal.nanosec / 10000000)) / ((double)procCounter);
     printf("Average Blocked Time: %.2f seconds\n", blkedAvg);
     printf("Total Idle Time with no ready processes: %d.%d seconds\n", idleTotal.sec, idleTotal.nanosec / 10000000);
     //printf("Total time of the program: %d.%d seconds\n", clockPtr-> sec, clockPtr-> nanosec / 10000000);
@@ -445,12 +445,16 @@ void scheduler(int maxProcsInSys)
 /* Determine if a new process should be created based on the conditions below */
 int shouldCreateNewProc(int maxProcs, int procCounter, clksim curTime, clksim nextProcTime, int pid)
 {
-    if(procCounter >= maxProcs) //less than 100
+    //Make sure we don't go over 100 processes
+    if(procCounter >= maxProcs)
         return 0;
-    if(pid < 0) //pid is available
+    //pid is not available
+    if(pid < 0)
         return 0;
+    //time to launch next proc sec greater than current time
     if(nextProcTime.sec > curTime.sec)
         return 0;
+    //time to launch next proc sec greater than current time and equal so check nanoseconds too
     if(nextProcTime.sec >= curTime.sec && nextProcTime.nanosec > curTime.nanosec)
         return 0;
     return 1;
@@ -466,7 +470,7 @@ int agingCheck(int maxProcsInSys, pcbt *pcbtPtr)
     for(i = 0; i < maxProcsInSys; i++)
     {
         pcbtPtr[i].ageTime = subTime(pcbtPtr[i].waitingTime, pcbtPtr[i].cpuTime);
-        if(pcbtPtr[i].ageTime.nanosec > 10000000000)
+        if(pcbtPtr[i].ageTime.sec >= 1 && pcbtPtr[i].ageTime.nanosec > 10000000000)
         {
             pcbtPtr[i].priority = 1;
             return i;
@@ -540,28 +544,31 @@ clksim nextProcessStartTime(clksim maxTimeBetweenProcs, clksim curTime)
 int dispatcher(int fakePid, int priority, int msgId, clksim curTime, int quantum, int *outputLines)
 {
     msg message;
+    int sendMessage, receiveMessage;
     quantum = quantum / (priority + 1);
     message.typeofMsg = fakePid + 1;
     message.valueofMsg = quantum;
     fprintf(filePtr, "OSS: Dispatching process with PID %d from queue %d at time %d:%d\n", fakePid, priority, curTime.sec, curTime.nanosec);
     *outputLines += 1;
-
-    if(msgsnd(msgId, &message, sizeof(message.valueofMsg), 0) == -1)
+    //Send the message and check for failure
+    sendMessage = msgsnd(msgId, &message, sizeof(message.valueofMsg), 0);
+    if(sendMessage == -1)
     {
         perror("oss: Error: Failed to send the message (msgsnd)");
         removeAllMem();
     }
-
-    if((msgrcv(msgId, &message, sizeof(message.valueofMsg), fakePid + 100, 0)) == -1)
+    //Recieve the message and check for failure
+    receiveMessage = msgrcv(msgId, &message, sizeof(message.valueofMsg), fakePid + 100, 0);
+    if(receiveMessage == -1)
     {
         perror("oss: Error: Failed to receive the message (msgrcv)");
         removeAllMem();
     }
-    
+    //Return the value based on terminate block or neither   
     return message.valueofMsg;
 }
 
-/* Create the queue */
+/* Create the queue and set the capacity and the number of items*/
 questrt *queueCreation(int capacity)
 {
     int i;
@@ -576,7 +583,7 @@ questrt *queueCreation(int capacity)
     return queuePtr;
 }
 
-/* Add a process to the queue */
+/* Add a process to the queue and update the number of items in the queue*/
 void enqueue(questrt *queuePtr, int pid)
 {
     queuePtr-> items += 1;
@@ -585,7 +592,7 @@ void enqueue(questrt *queuePtr, int pid)
     return;
 }
 
-/* Remove a process from the queue */
+/* Remove a process from the queue and update the number of items in the queue*/
 int dequeue(questrt *queuePtr)
 {
     int pid;
